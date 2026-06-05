@@ -25,7 +25,7 @@ Check Yaml...............................................................Failed
 expected = "Trim Trailing Whitespace.................................................Passed\nFix End of Files.........................................................Passed\nCheck Yaml...............................................................Failed\n- hook id: check-yaml\n- exit code: 1"
 
 [[tests.pre-commit]]
-name = "all passed — no INFO noise"
+name = "all passed - no INFO noise"
 input = """
 [INFO] Installing environment for https://github.com/pre-commit/mirrors-isort.
 [INFO] Once installed this environment will be reused.

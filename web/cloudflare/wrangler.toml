@@ -1,0 +1,7 @@
+name = "ctx-wire-community"
+main = "community-worker.js"
+compatibility_date = "2025-01-01"
+
+# Serves GET /v1/community: { stars, stargazers } for pivanov/ctx-wire, proxied
+# from GitHub and cached (1h fresh, 7d stale on 403) so the browser never hits
+# GitHub's 60/hr unauthenticated limit. Deploy: wrangler deploy.

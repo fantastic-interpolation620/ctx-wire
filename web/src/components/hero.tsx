@@ -14,12 +14,19 @@ import type { ImpactStats } from "../types";
 
 const AGENTS = [
   "claude",
-  "cursor",
   "codex",
+  "cursor",
   "gemini",
   "copilot",
   "cline",
   "windsurf",
+  "antigravity",
+  "hermes",
+  "kilocode",
+  "opencode",
+  "pi",
+  "visualstudio",
+  "vscode",
 ];
 
 const TRUST = [
@@ -31,7 +38,17 @@ const TRUST = [
 
 const GRID_TOTAL = 140;
 
-const label = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+const INSTALL = "curl -fsSL https://ctx-wire.dev/install.sh | sh";
+
+const AGENT_LABELS: Record<string, string> = {
+  opencode: "OpenCode",
+  kilocode: "Kilo Code",
+  vscode: "VS Code",
+  visualstudio: "Visual Studio",
+};
+
+const label = (id: string) =>
+  AGENT_LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
 
 type FlowItem = {
   program: string;
@@ -62,66 +79,69 @@ function flowItems(stats: ImpactStats): FlowItem[] {
 }
 
 export function Hero({ stats }: { stats: ImpactStats }) {
-  const [copied, copy] = useCopy();
   const [agent, setAgent] = useState("claude");
   const reduce = useReducedMotion();
   const v = (variant: typeof fadeUp) => (reduce ? undefined : variant);
 
-  const steps = [
-    { key: "install", text: "curl -fsSL https://ctx-wire.dev/install.sh | sh" },
-    { key: "init", text: `ctx-wire init ${agent}` },
-    { key: "gain", text: "ctx-wire gain" },
-  ];
-  const copyAll = steps.map((s) => s.text).join("\n");
-
   return (
-    <section
-      id="top"
-      className="grid w-full max-w-stage grid-cols-1 items-center gap-herogap pt-2 lg:grid-cols-2"
-    >
+    <section id="top" className="w-full max-w-stage pt-2">
+      <div className="grid grid-cols-1 items-center gap-herogap lg:grid-cols-2">
+        <motion.div
+          variants={v(staggerContainer)}
+          initial={reduce ? undefined : "hidden"}
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.1 }}
+        >
+          <motion.p
+            variants={v(fadeUp)}
+            className="m-0 mb-4 inline-flex items-center gap-2.5 font-mono text-xs font-medium uppercase tracking-eyebrow text-green"
+          >
+            <span className="size-1.5 rounded-full bg-green shadow-dot" />
+            context compression for AI coding agents
+          </motion.p>
+
+          <motion.h1
+            variants={v(fadeUp)}
+            className="m-0 mb-5 font-display text-hero font-extrabold text-head"
+          >
+            Cut the noise
+            <br />
+            on the{" "}
+            <span className="bg-linear-to-r from-green to-teal bg-clip-text text-transparent">
+              wire
+            </span>
+            .
+          </motion.h1>
+
+          <motion.p
+            variants={v(fadeUp)}
+            className="m-0 max-w-copy font-mono text-sub leading-relaxed text-label"
+          >
+            ctx-wire runs your commands, compresses the output with declarative
+            filters, scrubs secrets, and hands your agent a short result. The
+            full log stays on disk for when something actually fails.
+          </motion.p>
+        </motion.div>
+
+        <FlowDiagram items={flowItems(stats)} reduce={Boolean(reduce)} />
+      </div>
+
       <motion.div
         variants={v(staggerContainer)}
         initial={reduce ? undefined : "hidden"}
-        animate="visible"
+        whileInView="visible"
+        viewport={{ once: true, amount: 0.1 }}
+        className="mt-12"
       >
-        <motion.p
-          variants={v(fadeUp)}
-          className="m-0 mb-4 inline-flex items-center gap-2.5 font-mono text-xs font-medium uppercase tracking-eyebrow text-green"
-        >
-          <span className="size-1.5 rounded-full bg-green shadow-dot" />
-          context compression for AI coding agents
-        </motion.p>
-
-        <motion.h1
-          variants={v(fadeUp)}
-          className="m-0 mb-5 font-display text-hero font-extrabold text-head"
-        >
-          Cut the noise
-          <br />
-          on the{" "}
-          <span className="bg-linear-to-r from-green to-teal bg-clip-text text-transparent">
-            wire
-          </span>
-          .
-        </motion.h1>
-
-        <motion.p
-          variants={v(fadeUp)}
-          className="m-0 mb-7 max-w-copy font-mono text-sub leading-relaxed text-label"
-        >
-          ctx-wire runs your commands, compresses the output with declarative
-          filters, scrubs secrets, and hands your agent a short result. The full
-          log stays on disk for when something actually fails.
-        </motion.p>
-
-        <motion.div variants={v(fadeUp)} className="mb-4">
+        <motion.div variants={v(fadeUp)}>
           <span className="mb-2.5 block font-mono text-2xs uppercase tracking-caps text-label">
-            wire up your agent
+            wire up your agent{" "}
+            <span className="text-dim">· {AGENTS.length} supported</span>
           </span>
           <div
             role="tablist"
             aria-label="Agent"
-            className="no-scrollbar inline-flex max-w-full gap-1 overflow-x-auto rounded-full bg-white/3 p-1 ring-1 ring-inset ring-line-soft"
+            className="flex w-full flex-wrap gap-1.5 rounded-2xl bg-white/3 p-1.5 ring-1 ring-inset ring-line-soft"
           >
             {AGENTS.map((id) => {
               const active = id === agent;
@@ -132,7 +152,7 @@ export function Hero({ stats }: { stats: ImpactStats }) {
                   aria-selected={active}
                   key={id}
                   onClick={() => setAgent(id)}
-                  className={`relative shrink-0 whitespace-nowrap rounded-full px-3 py-1 font-mono text-2xs transition-colors ${
+                  className={`relative shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 font-mono text-2xs transition-colors ${
                     active ? "text-green" : "text-label hover:text-fg"
                   }`}
                 >
@@ -156,58 +176,29 @@ export function Hero({ stats }: { stats: ImpactStats }) {
 
         <motion.div
           variants={v(fadeUp)}
-          className="install-shadow max-w-md overflow-hidden rounded-card bg-linear-to-b from-panel to-screen"
+          className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-steps"
         >
-          <div className="flex items-center justify-between border-b border-line-soft bg-white/2 px-3.5 py-2.5">
-            <div className="flex items-center gap-1.5">
-              <span className="size-2 rounded-full bg-mac-close" />
-              <span className="size-2 rounded-full bg-mac-min" />
-              <span className="size-2 rounded-full bg-mac-zoom" />
-              <span className="ml-1.5 font-mono text-2xs lowercase text-label">
-                setup
-              </span>
-            </div>
-            <motion.button
-              type="button"
-              whileTap={reduce ? undefined : { scale: 0.94 }}
-              onClick={() => copy(copyAll)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-2xs transition-colors ${
-                copied
-                  ? "bg-green text-ink"
-                  : "bg-green/10 text-green ring-1 ring-inset ring-green/25 hover:bg-green/20"
-              }`}
-            >
-              {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
-              {copied ? "copied" : "copy"}
-            </motion.button>
+          <div className="flex flex-col">
+            <StepLabel n={1} title="Download" />
+            <CommandBox command={INSTALL} reduce={Boolean(reduce)} />
           </div>
-          <div className="flex flex-col p-1.5">
-            {steps.map((step) => (
-              <button
-                type="button"
-                key={step.key}
-                onClick={() => copy(step.text)}
-                title="Click to copy"
-                className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left font-mono text-sm text-fg transition-colors hover:bg-green/5"
-              >
-                <span className="select-none text-green">$</span>
-                <code>
-                  {step.key === "init" ? (
-                    <>
-                      ctx-wire init <span className="text-green">{agent}</span>
-                    </>
-                  ) : (
-                    step.text
-                  )}
-                </code>
-              </button>
-            ))}
+          <div className="flex flex-col">
+            <StepLabel n={2} title="Init" />
+            <CommandBox
+              command={`ctx-wire init ${agent}`}
+              agent={agent}
+              reduce={Boolean(reduce)}
+            />
+          </div>
+          <div className="flex flex-col">
+            <StepLabel n={3} title="Enjoy the gain" />
+            <CommandBox command="ctx-wire gain" reduce={Boolean(reduce)} />
           </div>
         </motion.div>
 
         <motion.ul
           variants={v(fadeUp)}
-          className="m-0 mt-5 flex list-none flex-wrap gap-2 p-0"
+          className="m-0 mt-5 flex list-none flex-wrap items-center gap-2 p-0"
         >
           {TRUST.map((item) => (
             <li
@@ -220,9 +211,60 @@ export function Hero({ stats }: { stats: ImpactStats }) {
           ))}
         </motion.ul>
       </motion.div>
-
-      <FlowDiagram items={flowItems(stats)} reduce={Boolean(reduce)} />
     </section>
+  );
+}
+
+function StepLabel({ n, title }: { n: number; title: string }) {
+  return (
+    <div className="mb-2.5 flex items-center gap-2.5">
+      <span className="grid size-6 place-items-center rounded-md bg-green font-mono text-2xs font-bold text-ink">
+        {n}
+      </span>
+      <span className="font-mono text-cap font-bold text-head">{title}</span>
+    </div>
+  );
+}
+
+function CommandBox({
+  agent,
+  command,
+  reduce,
+}: {
+  agent?: string;
+  command: string;
+  reduce: boolean;
+}) {
+  const [copied, copy] = useCopy();
+  return (
+    <motion.button
+      type="button"
+      whileTap={reduce ? undefined : { scale: 0.985 }}
+      onClick={() => copy(command)}
+      title="Click to copy"
+      className="install-shadow group relative flex w-full grow items-center gap-2.5 rounded-card border border-line-soft bg-linear-to-b from-panel to-screen px-4 py-3.5 pr-9 text-left font-mono text-cap transition-colors hover:border-green/30"
+    >
+      <span className="shrink-0 select-none text-green">$</span>
+      <code className="min-w-0 wrap-break-word leading-relaxed text-fg">
+        {agent ? (
+          <>
+            ctx-wire init <span className="text-green">{agent}</span>
+          </>
+        ) : (
+          command
+        )}
+      </code>
+      <span className="absolute right-3 top-1/2 -translate-y-1/2">
+        {copied ? (
+          <IconCheck size={14} className="text-green" />
+        ) : (
+          <IconCopy
+            size={14}
+            className="text-label transition-colors group-hover:text-green"
+          />
+        )}
+      </span>
+    </motion.button>
   );
 }
 

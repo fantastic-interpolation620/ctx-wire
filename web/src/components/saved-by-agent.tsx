@@ -6,9 +6,7 @@ import { AgentLogo, agentLabel } from "./agent-logos";
 
 export function SavedByAgent({ stats }: { stats: ImpactStats }) {
   const reduce = useReducedMotion();
-  const agents = (stats.agents ?? [])
-    .filter((a) => Number(a.tokens_saved || 0) > 0)
-    .slice(0, 6);
+  const agents = (stats.agents ?? []).filter((a) => Number(a.tokens_saved || 0) > 0);
 
   if (agents.length === 0) {
     return null;
@@ -41,7 +39,7 @@ export function SavedByAgent({ stats }: { stats: ImpactStats }) {
 
       <motion.div
         variants={reduce ? undefined : staggerContainer}
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
       >
         {agents.map((agent, index) => {
           const tokens = Number(agent.tokens_saved || 0);
@@ -56,7 +54,7 @@ export function SavedByAgent({ stats }: { stats: ImpactStats }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <span className="grid size-9 place-items-center rounded-lg bg-white ring-1 ring-inset ring-black/10">
-                    <AgentLogo name={agent.agent} size={18} />
+                    <AgentLogo name={agent.agent} size={32} />
                   </span>
                   <span className="font-mono text-sm font-bold text-head">
                     {agentLabel(agent.agent)}

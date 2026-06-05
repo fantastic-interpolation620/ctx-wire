@@ -1,5 +1,5 @@
 [filters.mise]
-description = "Compact mise task runner output — strip status lines, keep task results"
+description = "Compact mise task runner output - strip status lines, keep task results"
 match_command = "^mise\\s+(run|exec|install|upgrade)\\b"
 strip_ansi = true
 strip_lines_matching = [
@@ -21,8 +21,8 @@ expected = "lint check passed\n2 warnings found"
 
 [[tests.mise]]
 name = "preserves error output"
-input = "mise run lint\nError: biome check failed\nsrc/index.ts:5 — unused variable"
-expected = "mise run lint\nError: biome check failed\nsrc/index.ts:5 — unused variable"
+input = "mise run lint\nError: biome check failed\nsrc/index.ts:5 - unused variable"
+expected = "mise run lint\nError: biome check failed\nsrc/index.ts:5 - unused variable"
 
 [[tests.mise]]
 name = "empty after stripping"

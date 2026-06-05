@@ -1,5 +1,5 @@
 [filters.yamllint]
-description = "Compact yamllint output — strip blank lines, limit rows"
+description = "Compact yamllint output - strip blank lines, limit rows"
 match_command = "^yamllint\\b"
 strip_ansi = true
 strip_lines_matching = [

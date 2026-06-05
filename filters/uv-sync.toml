@@ -1,5 +1,5 @@
 [filters.uv-sync]
-description = "Compact uv sync/pip install output — strip downloads, short-circuit when up-to-date"
+description = "Compact uv sync/pip install output - strip downloads, short-circuit when up-to-date"
 match_command = "^uv\\s+(sync|pip\\s+install)\\b"
 strip_ansi = true
 strip_lines_matching = [

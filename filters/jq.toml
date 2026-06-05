@@ -1,5 +1,5 @@
 [filters.jq]
-description = "Compact jq output — truncate large JSON results"
+description = "Compact jq output - truncate large JSON results"
 match_command = "^jq\\b"
 strip_ansi = true
 strip_lines_matching = [

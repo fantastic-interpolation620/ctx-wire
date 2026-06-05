@@ -1,4 +1,4 @@
-// ctx-wire Pi extension — rewrites bash commands through ctx-wire so their
+// ctx-wire Pi extension - rewrites bash commands through ctx-wire so their
 // output reaches the model filtered and secret-scrubbed.
 //
 // Thin delegating extension: all rewrite logic lives in `ctx-wire rewrite` (the
@@ -13,7 +13,7 @@ const REWRITE_TIMEOUT_MS = 2_000
 export default async function (pi: ExtensionAPI) {
   const ver = await pi.exec("ctx-wire", ["version"], { timeout: REWRITE_TIMEOUT_MS })
   if (ver.code !== 0) {
-    console.warn("[ctx-wire] binary not found in PATH — extension disabled")
+    console.warn("[ctx-wire] binary not found in PATH - extension disabled")
     return
   }
 

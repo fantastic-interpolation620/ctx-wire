@@ -5,7 +5,7 @@ const STEPS = [
   {
     n: 1,
     title: "Run",
-    desc: "Your agent's command runs through ctx-wire — Bash hook, PATH shim, or MCP tool.",
+    desc: "Your agent's command runs through ctx-wire: a Bash hook, a PATH shim, or an MCP tool.",
   },
   {
     n: 2,
@@ -34,7 +34,7 @@ const CAPS = [
   },
   {
     name: "Streaming-aware bypass",
-    desc: "Auto-detects dev servers, watchers, interactive — no deadlocks.",
+    desc: "Auto-detects dev servers, watchers, interactive. No deadlocks.",
   },
   {
     name: "Per-agent attribution",
@@ -97,7 +97,7 @@ export function HowItWorks() {
 
       <motion.div
         variants={v(staggerContainer)}
-        className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
       >
         {CAPS.map((cap) => (
           <motion.div

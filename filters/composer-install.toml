@@ -1,5 +1,5 @@
 [filters.composer-install]
-description = "Compact composer install/update/require output — strip downloads, short-circuit when up-to-date"
+description = "Compact composer install/update/require output - strip downloads, short-circuit when up-to-date"
 match_command = "^composer\\s+(install|update|require)\\b"
 strip_ansi = true
 strip_lines_matching = [

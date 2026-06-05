@@ -1,5 +1,5 @@
 [filters.jira]
-description = "Compact Jira CLI output — strip verbose metadata, keep essentials"
+description = "Compact Jira CLI output - strip verbose metadata, keep essentials"
 match_command = "^jira\\b"
 strip_ansi = true
 strip_lines_matching = [

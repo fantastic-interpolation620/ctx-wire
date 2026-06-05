@@ -39,7 +39,7 @@ export function Stargazers({
 
       <motion.h2
         variants={reduce ? undefined : fadeUp}
-        className="m-0 max-w-2xl font-display text-h2 font-extrabold text-head"
+        className="m-0 max-w-3xl font-display text-h2 font-extrabold text-head"
       >
         {hasFaces ? (
           <>

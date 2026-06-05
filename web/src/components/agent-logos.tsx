@@ -1,24 +1,33 @@
-import {
-  siClaude,
-  siCline,
-  siCursor,
-  siGithubcopilot,
-  siGooglegemini,
-  siWindsurf,
-} from "simple-icons";
+import { useState } from "react";
 
-type Brand = { title: string; path: string; hex: string };
+// Every supported agent maps to a custom brand SVG in web/public/logos/<id>.svg.
+// Drop a file in and it shows automatically; until then the tile falls back to
+// a monogram. Keep the id in sync with the AGENTS list in hero.tsx.
+type Agent = { label: string; src: string; size?: number };
 
-// Telemetry normalizes the agent name to lowercase. Codex has no OpenAI mark in
-// simple-icons (it was removed), so it falls back to a monogram.
-const AGENTS: Record<string, { label: string; brand?: Brand }> = {
-  claude: { label: "Claude", brand: siClaude },
-  codex: { label: "Codex" },
-  cursor: { label: "Cursor", brand: siCursor },
-  gemini: { label: "Gemini", brand: siGooglegemini },
-  copilot: { label: "Copilot", brand: siGithubcopilot },
-  cline: { label: "Cline", brand: siCline },
-  windsurf: { label: "Windsurf", brand: siWindsurf },
+const AGENTS: Record<string, Agent> = {
+  claude: { label: "Claude", src: "/logos/claude.svg", size: 24 },
+  codex: { label: "Codex", src: "/logos/codex.svg", size: 32 },
+  cursor: { label: "Cursor", src: "/logos/cursor.svg", size: 24 },
+  gemini: { label: "Gemini", src: "/logos/gemini.svg", size: 24 },
+  copilot: { label: "Copilot", src: "/logos/copilot.svg", size: 24 },
+  cline: { label: "Cline", src: "/logos/cline.svg", size: 24 },
+  windsurf: { label: "Windsurf", src: "/logos/windsurf.svg", size: 24 },
+  antigravity: {
+    label: "Antigravity",
+    src: "/logos/antigravity.svg",
+    size: 24,
+  },
+  hermes: { label: "Hermes", src: "/logos/hermes.svg", size: 24 },
+  kilocode: { label: "Kilo Code", src: "/logos/kilocode.svg", size: 24 },
+  opencode: { label: "OpenCode", src: "/logos/opencode.svg", size: 24 },
+  pi: { label: "Pi", src: "/logos/pi.svg", size: 24 },
+  visualstudio: {
+    label: "Visual Studio",
+    src: "/logos/visualstudio.svg",
+    size: 24,
+  },
+  vscode: { label: "VS Code", src: "/logos/vscode.svg", size: 24 },
 };
 
 export function agentLabel(name: string): string {
@@ -27,25 +36,29 @@ export function agentLabel(name: string): string {
 
 export function AgentLogo({
   name,
-  size = 18,
+  size = 24,
 }: {
   name: string;
   size?: number;
 }) {
-  const brand = AGENTS[name]?.brand;
-  if (brand) {
+  const [failed, setFailed] = useState(false);
+  const src = AGENTS[name]?.src;
+  const iconSize = AGENTS[name]?.size || size;
+
+  if (src && !failed) {
     return (
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        width={size}
-        height={size}
-        fill={`#${brand.hex}`}
-      >
-        <path d={brand.path} />
-      </svg>
+      <img
+        src={src}
+        alt={agentLabel(name)}
+        width={iconSize}
+        height={iconSize}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="object-contain"
+      />
     );
   }
+
   return (
     <span aria-hidden="true" className="font-mono text-sm font-bold text-ink">
       {agentLabel(name).charAt(0)}

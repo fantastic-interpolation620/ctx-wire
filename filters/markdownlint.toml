@@ -1,5 +1,5 @@
 [filters.markdownlint]
-description = "Compact markdownlint output — strip blank lines, limit rows"
+description = "Compact markdownlint output - strip blank lines, limit rows"
 match_command = "^markdownlint\\b"
 strip_ansi = true
 strip_lines_matching = [

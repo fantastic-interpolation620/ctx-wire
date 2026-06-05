@@ -1,5 +1,5 @@
 [filters.stat]
-description = "Compact stat output — strip device/inode/birth noise"
+description = "Compact stat output - strip device/inode/birth noise"
 match_command = "^stat\\b"
 strip_ansi = true
 strip_lines_matching = [

@@ -1,5 +1,5 @@
 [filters.skopeo]
-description = "Compact skopeo output — truncate large manifests, strip verbosity"
+description = "Compact skopeo output - truncate large manifests, strip verbosity"
 match_command = "^skopeo\\b"
 strip_ansi = true
 strip_lines_matching = [

@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin"
 
-// ctx-wire OpenCode plugin — rewrites shell commands through ctx-wire so their
+// ctx-wire OpenCode plugin - rewrites shell commands through ctx-wire so their
 // output reaches the model with noise filtered and secrets scrubbed.
 //
 // Thin delegating plugin: all rewrite logic lives in `ctx-wire rewrite` (the
@@ -11,7 +11,7 @@ export const CtxWireOpenCodePlugin: Plugin = async ({ $ }) => {
   try {
     await $`which ctx-wire`.quiet()
   } catch {
-    console.warn("[ctx-wire] binary not found in PATH — plugin disabled")
+    console.warn("[ctx-wire] binary not found in PATH - plugin disabled")
     return {}
   }
 
@@ -32,7 +32,7 @@ export const CtxWireOpenCodePlugin: Plugin = async ({ $ }) => {
           ;(args as Record<string, unknown>).command = rewritten
         }
       } catch {
-        // ctx-wire rewrite failed — pass the command through unchanged.
+        // ctx-wire rewrite failed - pass the command through unchanged.
       }
     },
   }

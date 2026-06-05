@@ -1,5 +1,5 @@
 [filters.ps]
-description = "Compact ps output — truncate wide lines, limit rows"
+description = "Compact ps output - truncate wide lines, limit rows"
 match_command = "^ps(\\s|$)"
 strip_ansi = true
 truncate_lines_at = 120

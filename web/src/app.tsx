@@ -1,3 +1,4 @@
+import { ComparisonRtk } from "./components/comparison-rtk";
 import { Footer } from "./components/footer";
 import { GlobePanel } from "./components/globe-panel";
 import { Hero } from "./components/hero";
@@ -51,6 +52,8 @@ export function App() {
         </div>
 
         <SavedByAgent stats={stats} />
+
+        <ComparisonRtk />
 
         <Stargazers stargazers={stargazers} stars={stars} />
       </main>

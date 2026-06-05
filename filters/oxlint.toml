@@ -1,5 +1,5 @@
 [filters.oxlint]
-description = "Compact oxlint output — strip blank lines, keep diagnostics"
+description = "Compact oxlint output - strip blank lines, keep diagnostics"
 match_command = "^oxlint\\b"
 strip_ansi = true
 strip_lines_matching = [

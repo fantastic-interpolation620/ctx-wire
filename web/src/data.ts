@@ -3,6 +3,11 @@ import type { CountryMeta, ImpactStats } from "./types";
 export const IMPACT_ENDPOINT =
   "https://ctx-wire-telemetry.iweb-ivanov.workers.dev/v1/impact";
 
+// Stars + stargazers are proxied through a dedicated worker so visitors never
+// hit GitHub's 60/hr unauthenticated limit (worker caches 1h, stale 7d on 403).
+export const COMMUNITY_ENDPOINT =
+  "https://ctx-wire-community.iweb-ivanov.workers.dev/v1/community";
+
 export const POLL_MS = 5000;
 
 // USD per 1M tokens for the site-side savings estimate (the CLI sends tokens,

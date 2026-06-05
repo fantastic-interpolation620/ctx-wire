@@ -1,5 +1,5 @@
 [filters.ping]
-description = "Compact ping output — strip per-packet lines, keep summary"
+description = "Compact ping output - strip per-packet lines, keep summary"
 match_command = "^ping\\b"
 strip_ansi = true
 strip_lines_matching = [

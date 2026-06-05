@@ -1,5 +1,5 @@
 [filters.bundle-install]
-description = "Compact bundle install/update — strip 'Using' lines, keep installs and errors"
+description = "Compact bundle install/update - strip 'Using' lines, keep installs and errors"
 match_command = "^bundle\\s+(install|update)\\b"
 strip_ansi = true
 strip_lines_matching = [

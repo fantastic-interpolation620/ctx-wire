@@ -1,5 +1,5 @@
 [filters.task]
-description = "Compact go-task output — strip task headers, keep command results"
+description = "Compact go-task output - strip task headers, keep command results"
 match_command = "^task\\b"
 strip_ansi = true
 strip_lines_matching = [

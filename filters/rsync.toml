@@ -1,5 +1,5 @@
 [filters.rsync]
-description = "Compact rsync output — short-circuit on success, strip progress"
+description = "Compact rsync output - short-circuit on success, strip progress"
 match_command = "^rsync\\b"
 strip_ansi = true
 strip_lines_matching = [

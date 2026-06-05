@@ -83,7 +83,7 @@ verify:
 smoke:
     bash scripts/smoke.sh
 
-# Run the Windows (PowerShell) smoke suite — run this on Windows
+# Run the Windows (PowerShell) smoke suite - run this on Windows
 smoke-windows:
     pwsh -NoProfile -File scripts/smoke.ps1
 

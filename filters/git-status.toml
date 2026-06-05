@@ -1,5 +1,5 @@
 [filters.git-status]
-description = "Compact git status output — remove blank lines and advisory hints"
+description = "Compact git status output - remove blank lines and advisory hints"
 match_command = "^git\\s+(?:(--no-pager|--paginate|--no-optional-locks|--literal-pathspecs|--no-replace-objects|--bare|-C\\s+\\S+|-c\\s+\\S+|--git-dir(?:=\\S+|\\s+\\S+)|--work-tree(?:=\\S+|\\s+\\S+))\\s+)*status\\b"
 strip_ansi = true
 strip_lines_matching = [

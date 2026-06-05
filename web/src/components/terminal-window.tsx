@@ -45,14 +45,14 @@ export function TerminalWindow({ stats }: Props) {
       viewport={{ once: true, amount: 0.2 }}
       className="window-shadow w-full overflow-hidden rounded-window bg-screen"
     >
-      <header className="titlebar-bg relative flex h-9 items-center px-3.5">
+      <header className="titlebar-bg relative flex h-8 items-center px-3.5">
         <div className="flex items-center gap-2">
-          <span className="size-3 rounded-full bg-mac-close ring-1 ring-inset ring-black/15" />
-          <span className="size-3 rounded-full bg-mac-min ring-1 ring-inset ring-black/15" />
-          <span className="size-3 rounded-full bg-mac-zoom ring-1 ring-inset ring-black/15" />
+          <span className="size-2.5 rounded-full bg-mac-close ring-1 ring-inset ring-black/15" />
+          <span className="size-2.5 rounded-full bg-mac-min ring-1 ring-inset ring-black/15" />
+          <span className="size-2.5 rounded-full bg-mac-zoom ring-1 ring-inset ring-black/15" />
         </div>
 
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 font-mono text-cap text-chrome">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 font-mono text-2xs text-chrome">
           <span className="text-green">›_</span>
           ctx-wire gain
         </div>
