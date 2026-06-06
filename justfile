@@ -126,6 +126,9 @@ release release_version:
     else
       git push origin "$version"
     fi
+    # Build into a clean dist/ so a previous build's archives (e.g. an earlier
+    # version) can't be re-uploaded by the `gh release create dist/*` below.
+    rm -rf dist
     VERSION="$version" just pack-all
     if gh release view "$version" >/dev/null 2>&1; then
       echo "error: GitHub release $version already exists" >&2
