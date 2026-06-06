@@ -1,4 +1,4 @@
-import createGlobe, { type Arc, type Globe, type Marker } from "cobe";
+import createGlobe, { type Globe, type Marker } from "cobe";
 import { motion, useReducedMotion } from "motion/react";
 import {
   type CSSProperties,
@@ -239,7 +239,6 @@ function GlobePulse({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const globeRef = useRef<Globe | null>(null);
   const markersRef = useRef<Marker[]>(rows.map(toCobeMarker));
-  const arcsRef = useRef<Arc[]>(buildArcs(rows));
   const pointerInteracting = useRef<{ x: number; y: number } | null>(null);
   const dragOffset = useRef({ phi: 0, theta: 0 });
   const phiOffsetRef = useRef(0);
@@ -258,10 +257,8 @@ function GlobePulse({
 
   useEffect(() => {
     markersRef.current = rows.map(toCobeMarker);
-    arcsRef.current = buildArcs(rows);
     globeRef.current?.update({
       markers: markersRef.current,
-      arcs: arcsRef.current,
     });
   }, [rows]);
 
@@ -342,10 +339,7 @@ function GlobePulse({
         scale: 1,
         opacity: 0.95,
         markers: markersRef.current,
-        arcs: arcsRef.current,
-        arcColor: [0.38, 0.92, 0.78],
-        arcWidth: 0.5,
-        arcHeight: 0.42,
+        arcs: [],
       });
 
       // Reveal a frame past cobe's first paint (it has no onRender hook), so the
@@ -491,15 +485,4 @@ function toCobeMarker(row: CountryRow): Marker {
     location: row.location,
     size: row.size,
   };
-}
-
-function buildArcs(rows: CountryRow[]): Arc[] {
-  if (rows.length < 2) return [];
-  const nodes = rows.slice(0, 6);
-  const arcs: Arc[] = [];
-  for (let i = 0; i < nodes.length - 1; i++) {
-    arcs.push({ from: nodes[i].location, to: nodes[i + 1].location });
-  }
-  arcs.push({ from: nodes[nodes.length - 1].location, to: nodes[0].location });
-  return arcs;
 }
