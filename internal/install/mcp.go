@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+
+	"ctx-wire/internal/agent"
 )
 
 // mcpServerName is the key ctx-wire registers itself under in an mcp.json.
@@ -31,19 +33,49 @@ func VisualStudioMCPPath() (string, error) {
 
 // desiredMCPServer is the stdio server entry pointing at `ctx-wire mcp`. Used
 // both to write the config and to detect that it is already present.
-func desiredMCPServer() map[string]any {
-	return map[string]any{
+func desiredMCPServer(agentName string) map[string]any {
+	server := map[string]any{
 		"type":    "stdio",
 		"command": "ctx-wire",
 		"args":    []any{"mcp"},
 	}
+	if ag := agent.Normalize(agentName); ag != "" {
+		server["env"] = map[string]any{agent.EnvName: ag}
+	}
+	return server
+}
+
+func isManagedMCPServer(value any) bool {
+	server, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	if len(server) != 3 && len(server) != 4 {
+		return false
+	}
+	if server["type"] != "stdio" || server["command"] != "ctx-wire" {
+		return false
+	}
+	if !reflect.DeepEqual(server["args"], []any{"mcp"}) {
+		return false
+	}
+	env, hasEnv := server["env"]
+	if !hasEnv {
+		return true
+	}
+	envMap, ok := env.(map[string]any)
+	if !ok || len(envMap) != 1 {
+		return false
+	}
+	ag, ok := envMap[agent.EnvName].(string)
+	return ok && agent.Normalize(ag) != ""
 }
 
 // InstallMCP merges the ctx-wire stdio server into the mcp.json at path, under
 // the top-level "servers" object. Both VS Code and Visual Studio use this
 // format. Idempotent; preserves any other servers and top-level keys; atomic
 // write with .bak backup.
-func InstallMCP(path string) (changed bool, err error) {
+func InstallMCP(path, agentName string) (changed bool, err error) {
 	root := map[string]any{}
 	data, readErr := os.ReadFile(path)
 	switch {
@@ -67,10 +99,11 @@ func InstallMCP(path string) (changed bool, err error) {
 		return false, err
 	}
 
-	if existing, ok := servers[mcpServerName]; ok && reflect.DeepEqual(existing, desiredMCPServer()) {
+	desired := desiredMCPServer(agentName)
+	if existing, ok := servers[mcpServerName]; ok && reflect.DeepEqual(existing, desired) {
 		return false, nil
 	}
-	servers[mcpServerName] = desiredMCPServer()
+	servers[mcpServerName] = desired
 
 	out, err := json.MarshalIndent(root, "", "  ")
 	if err != nil {

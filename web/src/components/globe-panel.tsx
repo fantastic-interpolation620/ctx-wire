@@ -19,7 +19,7 @@ import {
   formatUsd,
   topCountries,
 } from "../format";
-import { fadeUp, fadeUpSmall, staggerContainer } from "../lib/variants";
+import { fadeUp, staggerContainer } from "../lib/variants";
 import type { ImpactStats } from "../types";
 
 // Canonical cobe focus angles: rotate so a marker faces the camera.
@@ -92,7 +92,7 @@ export function GlobePanel({ stats }: { stats: ImpactStats }) {
           variants={reduce ? undefined : fadeUp}
           className="mb-7 border-b border-line-soft pb-6"
         >
-          <div className="flex flex-wrap gap-reachgap">
+          <div className="grid grid-cols-2 gap-x-reachgap gap-y-6">
             <ReachStat label="Countries" value={formatInt(rows.length)} />
             <ReachStat
               label="Commands filtered"
@@ -182,21 +182,14 @@ function CountryPills({
   const reduce = useReducedMotion();
   return (
     <motion.ul
-      variants={reduce ? undefined : staggerContainer}
-      initial={reduce ? undefined : "hidden"}
-      whileInView="visible"
-      viewport={{ once: true, amount: 0.1 }}
+      variants={reduce ? undefined : fadeUp}
       aria-label="Countries by context saved"
       className="m-0 flex list-none flex-wrap gap-2 p-0"
     >
       {rows.map((row) => {
         const active = row.code === activeCode;
         return (
-          <motion.li
-            key={row.code}
-            variants={reduce ? undefined : fadeUpSmall}
-            className="m-0"
-          >
+          <li key={row.code} className="m-0">
             <button
               type="button"
               onClick={() => onSelect(active ? null : row)}
@@ -225,7 +218,7 @@ function CountryPills({
                 {formatBytes(row.saved)}
               </span>
             </button>
-          </motion.li>
+          </li>
         );
       })}
     </motion.ul>
@@ -253,6 +246,7 @@ function GlobePulse({
   const thetaOffsetRef = useRef(0);
   const pausedRef = useRef(false);
   const focusRef = useRef<{ phi: number; theta: number } | null>(null);
+  const onScreenRef = useRef(true);
 
   useEffect(() => {
     if (!focus) {
@@ -318,6 +312,7 @@ function GlobePulse({
     if (!canvas) return;
 
     let frame = 0;
+    let revealFrame = 0;
     let phi = -0.52;
     let activeSize = 0;
 
@@ -355,11 +350,11 @@ function GlobePulse({
 
       // Reveal a frame past cobe's first paint (it has no onRender hook), so the
       // canvas never flashes its blank backing buffer on load.
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
+      revealFrame = requestAnimationFrame(() => {
+        revealFrame = requestAnimationFrame(() => {
           canvas.style.opacity = "1";
-        })
-      );
+        });
+      });
     };
 
     const prefersReducedMotion =
@@ -377,16 +372,24 @@ function GlobePulse({
           phiOffsetRef.current +
           shortestAngle(target.phi - phi - phiOffsetRef.current);
         phiOffsetRef.current += (desired - phiOffsetRef.current) * 0.08;
-      } else if (!pausedRef.current && !prefersReducedMotion) {
+      } else if (
+        !pausedRef.current &&
+        !prefersReducedMotion &&
+        onScreenRef.current
+      ) {
         // Honor prefers-reduced-motion: hold the globe still rather than
         // auto-rotating it. A direct drag still updates phi via dragOffset, so
         // the globe stays interactive without continuous, unrequested motion.
         phi += speed;
       }
-      globeRef.current?.update({
-        phi: phi + phiOffsetRef.current + dragOffset.current.phi,
-        theta: 0.22 + thetaOffsetRef.current + dragOffset.current.theta,
-      });
+      // Skip the WebGL draw while the globe is scrolled off-screen: the loop
+      // keeps running (so it always resumes) but the GPU stays idle.
+      if (onScreenRef.current) {
+        globeRef.current?.update({
+          phi: phi + phiOffsetRef.current + dragOffset.current.phi,
+          theta: 0.22 + thetaOffsetRef.current + dragOffset.current.theta,
+        });
+      }
       frame = requestAnimationFrame(animate);
     };
 
@@ -398,12 +401,24 @@ function GlobePulse({
 
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
+
+    // Pause the GPU render loop when the globe scrolls out of view.
+    const visibility = new IntersectionObserver(
+      ([entry]) => {
+        onScreenRef.current = entry.isIntersecting;
+      },
+      { threshold: 0 }
+    );
+    visibility.observe(canvas);
+
     resize();
     animate();
 
     return () => {
       observer.disconnect();
+      visibility.disconnect();
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(revealFrame);
       globeRef.current?.destroy();
       globeRef.current = null;
     };

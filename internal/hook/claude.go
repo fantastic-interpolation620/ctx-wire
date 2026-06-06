@@ -50,7 +50,7 @@ func Claude(r io.Reader, w io.Writer) error {
 	if in.ToolName != "Bash" || in.ToolInput.Command == "" {
 		return nil
 	}
-	rewritten := rewrite.Line(in.ToolInput.Command)
+	rewritten := rewrite.LineForAgent(in.ToolInput.Command, "claude")
 	if rewritten == in.ToolInput.Command {
 		return nil // nothing to change
 	}

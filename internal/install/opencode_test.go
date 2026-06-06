@@ -23,7 +23,8 @@ func TestInstallOpenCode(t *testing.T) {
 		t.Fatalf("plugin not written: %v", err)
 	}
 	got := string(data)
-	if !strings.Contains(got, "tool.execute.before") || !strings.Contains(got, "ctx-wire rewrite") {
+	if !strings.Contains(got, "tool.execute.before") ||
+		!strings.Contains(got, "ctx-wire rewrite --agent opencode") {
 		t.Errorf("plugin content unexpected:\n%s", got)
 	}
 

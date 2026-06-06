@@ -59,11 +59,11 @@ func cmdInit(args []string) int {
 		var wd string
 		if wd, err = os.Getwd(); err == nil {
 			path = install.VSCodeMCPPath(wd)
-			changed, err = install.InstallMCP(path)
+			changed, err = install.InstallMCP(path, "vscode")
 		}
 	case "visualstudio", "vs":
 		if path, err = install.VisualStudioMCPPath(); err == nil {
-			changed, err = install.InstallMCP(path)
+			changed, err = install.InstallMCP(path, "visualstudio")
 		}
 	case "cline":
 		var wd string

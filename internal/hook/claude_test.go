@@ -31,7 +31,7 @@ func TestClaudeRewritesBashCommand(t *testing.T) {
 	if got.HookSpecificOutput.PermissionDecision != "allow" {
 		t.Errorf("permissionDecision = %q, want allow", got.HookSpecificOutput.PermissionDecision)
 	}
-	if want := "ctx-wire run git status"; got.HookSpecificOutput.UpdatedInput.Command != want {
+	if want := "ctx-wire run --agent claude git status"; got.HookSpecificOutput.UpdatedInput.Command != want {
 		t.Errorf("rewritten command = %q, want %q", got.HookSpecificOutput.UpdatedInput.Command, want)
 	}
 }

@@ -6,7 +6,9 @@ import { AgentLogo, agentLabel } from "./agent-logos";
 
 export function SavedByAgent({ stats }: { stats: ImpactStats }) {
   const reduce = useReducedMotion();
-  const agents = (stats.agents ?? []).filter((a) => Number(a.tokens_saved || 0) > 0);
+  const agents = (stats.agents ?? []).filter(
+    (a) => Number(a.tokens_saved || 0) > 0
+  );
 
   if (agents.length === 0) {
     return null;

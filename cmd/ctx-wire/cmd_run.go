@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
+	"ctx-wire/internal/agent"
 	"ctx-wire/internal/mcpserver"
 	"ctx-wire/internal/runner"
 )
@@ -41,10 +43,11 @@ func cmdMCP(args []string) int {
 func cmdRun(args []string) int {
 	if isHelpArg(args) {
 		printHelp(os.Stdout, helpDoc{
-			usage:   []string{"ctx-wire run <cmd> [args]"},
+			usage:   []string{"ctx-wire run [--agent <agent>] <cmd> [args]"},
 			summary: "Run a command, then filter and scrub its output before printing it.",
 			examples: []string{
 				"ctx-wire run git status",
+				"ctx-wire run --agent claude git status",
 				"ctx-wire run npm ci",
 			},
 			notes: []string{
@@ -54,8 +57,40 @@ func cmdRun(args []string) int {
 		return 0
 	}
 	if len(args) == 0 {
-		usageLine(os.Stderr, "ctx-wire run <cmd> [args]")
+		usageLine(os.Stderr, "ctx-wire run [--agent <agent>] <cmd> [args]")
 		return 2
+	}
+	agentName := ""
+	if args[0] == "--agent" {
+		if len(args) < 3 {
+			usageLine(os.Stderr, "ctx-wire run --agent <agent> <cmd> [args]")
+			return 2
+		}
+		agentName = args[1]
+		args = args[2:]
+	} else if strings.HasPrefix(args[0], "--agent=") {
+		agentName = strings.TrimPrefix(args[0], "--agent=")
+		args = args[1:]
+		if agentName == "" || len(args) == 0 {
+			usageLine(os.Stderr, "ctx-wire run --agent <agent> <cmd> [args]")
+			return 2
+		}
+	}
+	if agentName != "" {
+		ag := agent.Normalize(agentName)
+		if ag == "" {
+			fmt.Fprintf(os.Stderr, "ctx-wire run: invalid --agent value %q\n", agentName)
+			return 2
+		}
+		prev, hadPrev := os.LookupEnv(agent.EnvName)
+		os.Setenv(agent.EnvName, ag)
+		defer func() {
+			if hadPrev {
+				os.Setenv(agent.EnvName, prev)
+			} else {
+				os.Unsetenv(agent.EnvName)
+			}
+		}()
 	}
 	reg, err := loadRegistry()
 	if err != nil {

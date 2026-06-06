@@ -32,7 +32,7 @@ def _pre_tool_call(tool_name=None, args=None, **_kwargs):
             return
 
         result = subprocess.run(
-            ["ctx-wire", "rewrite", command],
+            ["ctx-wire", "rewrite", "--agent", "hermes", command],
             capture_output=True,
             text=True,
             timeout=_REWRITE_TIMEOUT_S,

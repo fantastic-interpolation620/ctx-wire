@@ -25,7 +25,7 @@ export default async function (pi: ExtensionAPI) {
       if (typeof cmd !== "string" || cmd.trim() === "") return
       if (cmd.startsWith("ctx-wire ")) return
 
-      const result = await pi.exec("ctx-wire", ["rewrite", cmd], {
+      const result = await pi.exec("ctx-wire", ["rewrite", "--agent", "pi", cmd], {
         timeout: REWRITE_TIMEOUT_MS,
         signal: ctx.signal,
       })

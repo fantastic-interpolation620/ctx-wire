@@ -44,7 +44,7 @@ func Gemini(r io.Reader, w io.Writer) error {
 	if in.ToolName != "run_shell_command" || in.ToolInput.Command == "" {
 		return allow()
 	}
-	rewritten := rewrite.Line(in.ToolInput.Command)
+	rewritten := rewrite.LineForAgent(in.ToolInput.Command, "gemini")
 	if rewritten == in.ToolInput.Command {
 		return allow()
 	}

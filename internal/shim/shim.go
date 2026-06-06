@@ -428,10 +428,17 @@ if [ "$should_wire" != 1 ]; then
       *claude*) should_wire=1; detected_agent=claude; break ;;
       *codex*) should_wire=1; detected_agent=codex; break ;;
       *cursor*) should_wire=1; detected_agent=cursor; break ;;
-      *windsurf*) should_wire=1; detected_agent=windsurf; break ;;
-      *cline*) should_wire=1; detected_agent=cline; break ;;
       *gemini*) should_wire=1; detected_agent=gemini; break ;;
       *copilot*) should_wire=1; detected_agent=copilot; break ;;
+      *windsurf*) should_wire=1; detected_agent=windsurf; break ;;
+      *cline*) should_wire=1; detected_agent=cline; break ;;
+      *kilocode*) should_wire=1; detected_agent=kilocode; break ;;
+      *antigravity*) should_wire=1; detected_agent=antigravity; break ;;
+      *opencode*) should_wire=1; detected_agent=opencode; break ;;
+      *pi-coding-agent*|*"pi coding agent"*|*/.pi/agent*) should_wire=1; detected_agent=pi; break ;;
+      *hermes*) should_wire=1; detected_agent=hermes; break ;;
+      *vscode*|*"Visual Studio Code"*|*"visual studio code"*) should_wire=1; detected_agent=vscode; break ;;
+      *visualstudio*|*"Visual Studio"*|*"visual studio"*) should_wire=1; detected_agent=visualstudio; break ;;
       *agent-browser*) should_wire=1; break ;;
     esac
     ppid=$(ps -o ppid= -p "$ppid" 2>/dev/null | tr -d ' ')

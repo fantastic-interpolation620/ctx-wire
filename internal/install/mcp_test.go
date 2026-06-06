@@ -8,7 +8,7 @@ import (
 
 func TestInstallMCPGoldenFresh(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mcp.json")
-	changed, err := InstallMCP(path)
+	changed, err := InstallMCP(path, "vscode")
 	if err != nil {
 		t.Fatalf("InstallMCP: %v", err)
 	}
@@ -30,10 +30,10 @@ func TestInstallMCPGoldenFresh(t *testing.T) {
 
 func TestInstallMCPIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mcp.json")
-	if _, err := InstallMCP(path); err != nil {
+	if _, err := InstallMCP(path, "vscode"); err != nil {
 		t.Fatalf("first install: %v", err)
 	}
-	changed, err := InstallMCP(path)
+	changed, err := InstallMCP(path, "vscode")
 	if err != nil {
 		t.Fatalf("second install: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestInstallMCPPreservesExisting(t *testing.T) {
 	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := InstallMCP(path); err != nil {
+	if _, err := InstallMCP(path, "vscode"); err != nil {
 		t.Fatalf("InstallMCP: %v", err)
 	}
 	root := readSettings(t, path)
@@ -70,12 +70,39 @@ func TestInstallMCPPreservesExisting(t *testing.T) {
 	}
 }
 
+func TestInstallMCPMarksAgent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.json")
+	if _, err := InstallMCP(path, "visualstudio"); err != nil {
+		t.Fatalf("InstallMCP: %v", err)
+	}
+	root := readSettings(t, path)
+	servers := root["servers"].(map[string]any)
+	ctxWire := servers["ctx-wire"].(map[string]any)
+	env := ctxWire["env"].(map[string]any)
+	if got := env["CTX_WIRE_AGENT"]; got != "visualstudio" {
+		t.Fatalf("CTX_WIRE_AGENT = %v, want visualstudio", got)
+	}
+}
+
+func TestInstallMCPOmitsInvalidAgent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.json")
+	if _, err := InstallMCP(path, "bad value"); err != nil {
+		t.Fatalf("InstallMCP: %v", err)
+	}
+	root := readSettings(t, path)
+	servers := root["servers"].(map[string]any)
+	ctxWire := servers["ctx-wire"].(map[string]any)
+	if _, ok := ctxWire["env"]; ok {
+		t.Fatalf("expected invalid agent to omit env, got %v", ctxWire["env"])
+	}
+}
+
 func TestInstallMCPRejectsWrongServersShape(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mcp.json")
 	if err := os.WriteFile(path, []byte(`{"servers":[]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := InstallMCP(path); err == nil {
+	if _, err := InstallMCP(path, "vscode"); err == nil {
 		t.Fatal("expected schema error for non-object servers")
 	}
 }

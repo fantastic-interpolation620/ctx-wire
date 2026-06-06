@@ -4,7 +4,7 @@
 // reads it and records it on each gain entry so savings can be attributed and
 // broken down per agent. The value is always one ctx-wire itself produces, but
 // it is normalized defensively (lowercase, restricted charset) so a stray
-// environment value can never corrupt the log or a shell assignment.
+// environment value can never corrupt the log or an aggregation key.
 package agent
 
 import (
@@ -27,12 +27,15 @@ const maxNameLen = 32
 // Known lists the agent names ctx-wire produces today. It is informational
 // (used by tests and docs); Normalize accepts any well-formed name, not just
 // these, so a new agent does not require a code change here.
-var Known = []string{"claude", "codex", "cursor", "gemini", "copilot", "windsurf", "cline"}
+var Known = []string{
+	"claude", "codex", "cursor", "gemini", "copilot", "windsurf", "cline",
+	"kilocode", "antigravity", "opencode", "pi", "hermes", "vscode", "visualstudio",
+}
 
 // Normalize lowercases and validates an agent name. It returns "" for an empty,
 // over-long, or otherwise malformed value (anything outside [a-z0-9-]). The
-// restricted charset keeps the name safe to splice into a shell assignment
-// without quoting and to use as an aggregation key.
+// restricted charset keeps the name safe to pass through hooks, config files,
+// and aggregation keys.
 func Normalize(name string) string {
 	name = strings.ToLower(strings.TrimSpace(name))
 	if name == "" || len(name) > maxNameLen {
@@ -52,10 +55,9 @@ func Normalize(name string) string {
 }
 
 // Current returns the name of the agent that invoked this process, or "" when
-// unattributed. An explicit CTX_WIRE_AGENT wins (set by a shim's export, an
-// agent's env config, or a test); otherwise it falls back to walking the
-// process tree, so a hook-rewritten `ctx-wire run` is attributed without the
-// hook having to bake the agent into the visible command line.
+// unattributed. An explicit CTX_WIRE_AGENT wins (set by `ctx-wire run --agent`,
+// a shim's export, an agent's env config, or a test); otherwise it falls back
+// to walking the process tree.
 func Current() string {
 	if a := Normalize(os.Getenv(EnvName)); a != "" {
 		return a

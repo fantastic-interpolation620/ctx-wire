@@ -184,17 +184,17 @@ if [ ! -e "$HOMEDIR/.local/share/ctx-wire" ]; then ok "uninstall purges data dir
 
 step "hook adapters rewrite commands"
 claude_out="$(echo '{"tool_name":"Bash","tool_input":{"command":"git status"}}' | cw hook claude)"
-if echo "$claude_out" | grep -q 'ctx-wire run git status'; then ok "hook claude rewrite"; else bad "hook claude rewrite (got: $claude_out)"; fi
+if echo "$claude_out" | grep -q 'ctx-wire run --agent claude git status'; then ok "hook claude rewrite"; else bad "hook claude rewrite (got: $claude_out)"; fi
 cursor_out="$(echo '{"tool_name":"Shell","tool_input":{"command":"git status"}}' | cw hook cursor)"
-if echo "$cursor_out" | grep -q '"updated_input"' && echo "$cursor_out" | grep -q 'ctx-wire run git status'; then ok "hook cursor rewrite"; else bad "hook cursor rewrite (got: $cursor_out)"; fi
+if echo "$cursor_out" | grep -q '"updated_input"' && echo "$cursor_out" | grep -q 'ctx-wire run --agent cursor git status'; then ok "hook cursor rewrite"; else bad "hook cursor rewrite (got: $cursor_out)"; fi
 codex_out="$(echo '{"tool_name":"Bash","tool_input":{"command":"git status"}}' | cw hook codex)"
-if echo "$codex_out" | grep -q 'ctx-wire run git status'; then ok "hook codex rewrite"; else bad "hook codex rewrite (got: $codex_out)"; fi
+if echo "$codex_out" | grep -q 'ctx-wire run --agent codex git status'; then ok "hook codex rewrite"; else bad "hook codex rewrite (got: $codex_out)"; fi
 gemini_out="$(echo '{"tool_name":"run_shell_command","tool_input":{"command":"git status"}}' | cw hook gemini)"
-if echo "$gemini_out" | grep -q 'ctx-wire run git status'; then ok "hook gemini rewrite"; else bad "hook gemini rewrite (got: $gemini_out)"; fi
+if echo "$gemini_out" | grep -q 'ctx-wire run --agent gemini git status'; then ok "hook gemini rewrite"; else bad "hook gemini rewrite (got: $gemini_out)"; fi
 copilot_out="$(echo '{"tool_name":"runTerminalCommand","tool_input":{"command":"git status"}}' | cw hook copilot)"
-if echo "$copilot_out" | grep -q 'ctx-wire run git status'; then ok "hook copilot vscode rewrite"; else bad "hook copilot vscode rewrite (got: $copilot_out)"; fi
+if echo "$copilot_out" | grep -q 'ctx-wire run --agent copilot git status'; then ok "hook copilot vscode rewrite"; else bad "hook copilot vscode rewrite (got: $copilot_out)"; fi
 copilot_cli_out="$(echo '{"toolName":"bash","toolArgs":"{\"command\":\"git status\"}"}' | cw hook copilot)"
-if echo "$copilot_cli_out" | grep -q '"permissionDecision":"deny"' && echo "$copilot_cli_out" | grep -q 'ctx-wire run git status'; then ok "hook copilot cli suggestion"; else bad "hook copilot cli suggestion (got: $copilot_cli_out)"; fi
+if echo "$copilot_cli_out" | grep -q '"permissionDecision":"deny"' && echo "$copilot_cli_out" | grep -q 'ctx-wire run --agent copilot git status'; then ok "hook copilot cli suggestion"; else bad "hook copilot cli suggestion (got: $copilot_cli_out)"; fi
 
 step "MCP run_command"
 if command -v go >/dev/null 2>&1; then

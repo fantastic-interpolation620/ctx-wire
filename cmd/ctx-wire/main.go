@@ -10,6 +10,7 @@ import (
 	"ctx-wire/internal/commandpolicy"
 	"ctx-wire/internal/config"
 	"ctx-wire/internal/filter"
+	"ctx-wire/internal/selfupdate"
 	"ctx-wire/internal/ui"
 )
 
@@ -29,15 +30,34 @@ func main() {
 		usage(os.Stderr)
 		os.Exit(2)
 	}
+	// Hidden re-entry point: the detached child that performs a background
+	// self-update. Handle it before any normal processing so it stays minimal and
+	// can never recurse into another auto-update.
+	if selfupdate.IsBackgroundArg(os.Args[1]) {
+		selfupdate.RunBackground(version)
+		os.Exit(0)
+	}
 	// Load the user config once and apply the exclude list to the shared command
 	// policy (honored by both the hook rewriter and the runner). Best-effort: a
 	// malformed config warns but never blocks a command.
-	if cfg, err := config.Load(); err != nil {
+	cfg, err := config.Load()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "ctx-wire: %v\n", err)
 	} else {
 		commandpolicy.SetExcludedCommands(cfg.Hooks.ExcludeCommands)
 		commandpolicy.SetTransparentPrefixes(cfg.Hooks.TransparentPrefixes)
 		filter.SetUltraCompact(cfg.Output.UltraCompact)
+	}
+	// Auto-update is opt-out and runs only on human-facing commands, never on the
+	// run/hook/rewrite/mcp hot paths (per-command, machine-facing). It is fully
+	// non-blocking: at most once per interval it spawns a detached updater and
+	// returns immediately. Fail closed on a config parse error: a broken config
+	// must not trigger a background download+replace the user can't see.
+	if err == nil && cfg.Update.AutoEnabled() {
+		switch os.Args[1] {
+		case "gain", "doctor":
+			selfupdate.MaybeBackgroundUpdate(version, cfg.Update.Interval())
+		}
 	}
 	switch os.Args[1] {
 	case "run":

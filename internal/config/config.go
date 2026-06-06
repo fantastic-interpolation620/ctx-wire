@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BurntSushi/toml"
 
@@ -21,6 +22,35 @@ const envConfig = "CTX_WIRE_CONFIG"
 type Config struct {
 	Hooks  Hooks  `toml:"hooks"`
 	Output Output `toml:"output"`
+	Update Update `toml:"update"`
+}
+
+// Update controls background self-update behavior.
+type Update struct {
+	// Auto enables periodic background self-update checks (about every 2 hours,
+	// only on human-facing commands, never on the run/hook hot path). When a
+	// newer release is found it is downloaded, checksum-verified, and atomically
+	// installed by a detached background process. Unset means enabled; set
+	// `auto = false` to turn it off. The CTX_WIRE_NO_AUTOUPDATE env var also
+	// disables it.
+	Auto *bool `toml:"auto"`
+
+	// IntervalHours overrides the minimum hours between checks (default 2).
+	IntervalHours int `toml:"interval_hours"`
+}
+
+// AutoEnabled reports whether background self-update is on (the default).
+func (u Update) AutoEnabled() bool {
+	return u.Auto == nil || *u.Auto
+}
+
+// Interval returns the configured minimum time between checks, or 0 to let the
+// selfupdate package apply its default.
+func (u Update) Interval() time.Duration {
+	if u.IntervalHours <= 0 {
+		return 0
+	}
+	return time.Duration(u.IntervalHours) * time.Hour
 }
 
 // Output controls how filtered output is rendered.

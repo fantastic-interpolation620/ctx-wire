@@ -26,7 +26,7 @@ export const CtxWireOpenCodePlugin: Plugin = async ({ $ }) => {
       if (typeof command !== "string" || !command) return
 
       try {
-        const result = await $`ctx-wire rewrite ${command}`.quiet().nothrow()
+        const result = await $`ctx-wire rewrite --agent opencode ${command}`.quiet().nothrow()
         const rewritten = String(result.stdout).trim()
         if (rewritten && rewritten !== command) {
           ;(args as Record<string, unknown>).command = rewritten

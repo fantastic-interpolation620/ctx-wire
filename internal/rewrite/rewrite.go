@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ctx-wire/internal/agent"
 	"ctx-wire/internal/commandpolicy"
 )
 
@@ -64,6 +65,18 @@ var shellKeywords = map[string]bool{
 // input unchanged (callers treat an unchanged result as a no-op passthrough).
 func Line(line string) string {
 	return lineWith(line, prefix)
+}
+
+// LineForAgent rewrites a shell command line and marks wrapped ctx-wire runs
+// with the invoking agent. The explicit ctx-wire flag is more reliable than
+// process-tree detection for plugins, MCP hosts, and agents that launch shell
+// commands through helper processes.
+func LineForAgent(line, agentName string) string {
+	name := agent.Normalize(agentName)
+	if name == "" {
+		return Line(line)
+	}
+	return lineWith(line, "ctx-wire run --agent "+name+" ")
 }
 
 // lineWith rewrites a command line using wrap as the wrap prefix for each

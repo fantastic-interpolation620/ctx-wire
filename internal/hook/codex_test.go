@@ -3,6 +3,7 @@ package hook
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -57,24 +58,32 @@ func TestCodexFailsOpenOnGarbage(t *testing.T) {
 }
 
 func TestCodexAllowsPermissionForWrappedAgentBrowser(t *testing.T) {
-	payload := `{
-	  "hook_event_name": "PermissionRequest",
-	  "tool_name": "Bash",
-	  "tool_input": {
-	    "command": "ctx-wire run agent-browser eval 'document.title'"
-	  }
-	}`
-	var out bytes.Buffer
-	if err := Codex(strings.NewReader(payload), &out); err != nil {
-		t.Fatalf("Codex: %v", err)
-	}
-	var got codexOutput
-	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
-		t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
-	}
-	decision := got.HookSpecificOutput.Decision
-	if got.HookSpecificOutput.HookEventName != "PermissionRequest" || decision == nil || decision.Behavior != "allow" {
-		t.Fatalf("unexpected permission response: %#v", got.HookSpecificOutput)
+	for _, command := range []string{
+		"ctx-wire run agent-browser eval 'document.title'",
+		"ctx-wire run --agent codex agent-browser eval 'document.title'",
+		"ctx-wire run --agent=codex agent-browser eval 'document.title'",
+	} {
+		t.Run(command, func(t *testing.T) {
+			payload := fmt.Sprintf(`{
+			  "hook_event_name": "PermissionRequest",
+			  "tool_name": "Bash",
+			  "tool_input": {
+			    "command": %q
+			  }
+			}`, command)
+			var out bytes.Buffer
+			if err := Codex(strings.NewReader(payload), &out); err != nil {
+				t.Fatalf("Codex: %v", err)
+			}
+			var got codexOutput
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
+			}
+			decision := got.HookSpecificOutput.Decision
+			if got.HookSpecificOutput.HookEventName != "PermissionRequest" || decision == nil || decision.Behavior != "allow" {
+				t.Fatalf("unexpected permission response: %#v", got.HookSpecificOutput)
+			}
+		})
 	}
 }
 
@@ -109,5 +118,22 @@ func TestCodexDoesNotAutoAllowAgentBrowserPrefixLookalike(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Errorf("expected no output for lookalike permission request, got %q", out.String())
+	}
+}
+
+func TestCodexDoesNotAutoAllowInvalidAgentFlag(t *testing.T) {
+	payload := `{
+	  "hook_event_name": "PermissionRequest",
+	  "tool_name": "Bash",
+	  "tool_input": {
+	    "command": "ctx-wire run --agent 'bad value' agent-browser eval x"
+	  }
+	}`
+	var out bytes.Buffer
+	if err := Codex(strings.NewReader(payload), &out); err != nil {
+		t.Fatalf("Codex: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("expected no output for invalid agent flag, got %q", out.String())
 	}
 }

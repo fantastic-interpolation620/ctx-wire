@@ -43,7 +43,7 @@ func Cursor(r io.Reader, w io.Writer) error {
 	if in.ToolName != "Shell" || in.ToolInput.Command == "" {
 		return allow()
 	}
-	rewritten := rewrite.Line(in.ToolInput.Command)
+	rewritten := rewrite.LineForAgent(in.ToolInput.Command, "cursor")
 	if rewritten == in.ToolInput.Command {
 		return allow()
 	}

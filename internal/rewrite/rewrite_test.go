@@ -90,6 +90,29 @@ func TestLine(t *testing.T) {
 	}
 }
 
+func TestLineForAgent(t *testing.T) {
+	tests := []struct {
+		name  string
+		agent string
+		in    string
+		want  string
+	}{
+		{"simple command", "claude", "git status", "ctx-wire run --agent claude git status"},
+		{"compound", "codex", "git status && ls", "ctx-wire run --agent codex git status && ctx-wire run --agent codex ls"},
+		{"time prefix", "gemini", "time go test", "time ctx-wire run --agent gemini go test"},
+		{"command prefix", "opencode", "command git status", "command ctx-wire run --agent opencode git status"},
+		{"already marked", "claude", "ctx-wire run --agent claude git status", "ctx-wire run --agent claude git status"},
+		{"invalid agent falls back", "bad value", "git status", "ctx-wire run git status"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := LineForAgent(tt.in, tt.agent); got != tt.want {
+				t.Fatalf("LineForAgent(%q, %q) = %q, want %q", tt.in, tt.agent, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLineIdempotent(t *testing.T) {
 	once := Line("git status && make test")
 	twice := Line(once)

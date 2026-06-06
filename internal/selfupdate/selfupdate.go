@@ -1,8 +1,12 @@
-// Package selfupdate implements `ctx-wire update`: an explicit, opt-in upgrade
-// that downloads the latest release binary from public GitHub Releases, verifies
-// its SHA-256 checksum, and atomically replaces the running binary with a
-// backup-and-rollback. It never checks automatically and never phones home on
-// its own; it runs only when the user asks.
+// Package selfupdate upgrades ctx-wire by downloading the latest release binary
+// from public GitHub Releases, verifying its SHA-256 checksum, and atomically
+// replacing the running binary with a backup-and-rollback.
+//
+// It runs in two ways: the explicit `ctx-wire update` command, and an opt-out
+// background updater (MaybeBackgroundUpdate) that checks at most a few times a
+// day on human-facing commands and applies any newer release in a detached
+// process. The background path is disabled by `[update] auto = false` in config
+// or the CTX_WIRE_NO_AUTOUPDATE env var, and never runs for dev builds.
 package selfupdate
 
 import (
@@ -230,12 +234,14 @@ func isNewer(current, latest string) bool {
 	return compareVersions(current, latest) < 0
 }
 
-// compareVersions compares two dotted versions (leading "v" ignored). It returns
-// -1 if a < b, 0 if equal, 1 if a > b. An unparseable/"dev" version sorts below
-// any real version.
+// compareVersions compares two versions (leading "v" ignored). It returns -1 if
+// a < b, 0 if equal, 1 if a > b. An unparseable/"dev" version sorts below any
+// real version. Equal numeric cores are then ordered by pre-release per semver:
+// a stable release outranks any pre-release of the same core (so 0.1.2-rc1 <
+// 0.1.2), which is what lets an RC dogfood roll forward to the stable release.
 func compareVersions(a, b string) int {
-	pa, oka := parseVersion(a)
-	pb, okb := parseVersion(b)
+	pa, prea, oka := parseVersion(a)
+	pb, preb, okb := parseVersion(b)
 	switch {
 	case !oka && !okb:
 		return 0
@@ -252,25 +258,96 @@ func compareVersions(a, b string) int {
 			return 1
 		}
 	}
-	return 0
+	return comparePre(prea, preb)
 }
 
-func parseVersion(v string) ([3]int, bool) {
+// comparePre orders two pre-release identifiers by semver precedence. The empty
+// identifier (a normal release) ranks ABOVE any pre-release, so 1.2.3 > 1.2.3-rc1.
+// Otherwise each dot-separated field is compared: numeric fields numerically,
+// alphanumeric fields lexically, with a numeric field ranking below an
+// alphanumeric one; when one identifier is a prefix of the other, the longer one
+// wins. (Single-token identifiers like "rc10" compare lexically per semver; use
+// a dotted "rc.10" if you need numeric ordering past rc9.)
+func comparePre(a, b string) int {
+	if a == b {
+		return 0
+	}
+	if a == "" {
+		return 1 // stable outranks a pre-release
+	}
+	if b == "" {
+		return -1
+	}
+	as := strings.Split(a, ".")
+	bs := strings.Split(b, ".")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		an, aNum := numericID(as[i])
+		bn, bNum := numericID(bs[i])
+		switch {
+		case aNum && bNum:
+			if an != bn {
+				return sign(an - bn)
+			}
+		case aNum:
+			return -1 // numeric identifiers rank below alphanumeric ones
+		case bNum:
+			return 1
+		default:
+			if as[i] != bs[i] {
+				if as[i] < bs[i] {
+					return -1
+				}
+				return 1
+			}
+		}
+	}
+	return sign(len(as) - len(bs)) // a longer identifier set outranks its prefix
+}
+
+// numericID reports whether a pre-release field is a non-negative integer and
+// returns its value.
+func numericID(s string) (int, bool) {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+func sign(n int) int {
+	switch {
+	case n < 0:
+		return -1
+	case n > 0:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// parseVersion splits a version into its numeric [major, minor, patch] core and
+// its pre-release identifier (the text after "-", before any "+" build metadata,
+// which semver ignores for precedence). ok is false for a "dev" or otherwise
+// unparseable version. Examples: "v0.1.2" -> {0,1,2},"" ; "0.1.2-rc1" -> {0,1,2},"rc1".
+func parseVersion(v string) (core [3]int, pre string, ok bool) {
 	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
-	if i := strings.IndexAny(v, "-+"); i >= 0 { // drop pre-release/build metadata
+	if i := strings.IndexByte(v, '+'); i >= 0 { // build metadata never affects precedence
+		v = v[:i]
+	}
+	if i := strings.IndexByte(v, '-'); i >= 0 { // split off the pre-release identifier
+		pre = v[i+1:]
 		v = v[:i]
 	}
 	parts := strings.Split(v, ".")
 	if len(parts) == 0 || parts[0] == "" {
-		return [3]int{}, false
+		return [3]int{}, "", false
 	}
-	var out [3]int
 	for i := 0; i < 3 && i < len(parts); i++ {
 		n, err := strconv.Atoi(parts[i])
 		if err != nil {
-			return [3]int{}, false
+			return [3]int{}, "", false
 		}
-		out[i] = n
+		core[i] = n
 	}
-	return out, true
+	return core, pre, true
 }

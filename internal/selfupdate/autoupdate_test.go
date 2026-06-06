@@ -1,0 +1,85 @@
+package selfupdate
+
+import (
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestDue(t *testing.T) {
+	now := time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name     string
+		last     time.Time
+		interval time.Duration
+		want     bool
+	}{
+		{"never checked", time.Time{}, 6 * time.Hour, true},
+		{"just checked", now.Add(-1 * time.Hour), 6 * time.Hour, false},
+		{"exactly at interval", now.Add(-6 * time.Hour), 6 * time.Hour, true},
+		{"past interval", now.Add(-7 * time.Hour), 6 * time.Hour, true},
+		{"zero interval uses default", now.Add(-1 * time.Hour), 0, false},
+		{"zero interval past default", now.Add(-7 * time.Hour), 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := due(tt.last, now, tt.interval); got != tt.want {
+				t.Fatalf("due(%v, now, %v) = %v, want %v", tt.last, tt.interval, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLastCheckRoundTrip(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+
+	if got := readLastCheck(); !got.IsZero() {
+		t.Fatalf("readLastCheck with no file = %v, want zero", got)
+	}
+
+	want := time.Date(2026, 6, 6, 9, 30, 0, 0, time.UTC)
+	if err := writeLastCheck(want); err != nil {
+		t.Fatalf("writeLastCheck: %v", err)
+	}
+	got := readLastCheck()
+	if !got.Equal(want) {
+		t.Fatalf("readLastCheck = %v, want %v", got, want)
+	}
+
+	p, err := statePath()
+	if err != nil {
+		t.Fatalf("statePath: %v", err)
+	}
+	if base := filepath.Base(p); base != "update.json" {
+		t.Fatalf("state file = %q, want update.json", base)
+	}
+}
+
+func TestMaybeBackgroundUpdateThrottlesAndSkipsDev(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+
+	// A dev/unversioned build must never stamp a check or spawn.
+	MaybeBackgroundUpdate("dev", 6*time.Hour)
+	if !readLastCheck().IsZero() {
+		t.Fatal("dev build should not record a check")
+	}
+
+	// Disabled via env: also a no-op.
+	t.Setenv(EnvDisable, "1")
+	MaybeBackgroundUpdate("0.1.0", 6*time.Hour)
+	if !readLastCheck().IsZero() {
+		t.Fatal("CTX_WIRE_NO_AUTOUPDATE should suppress the check")
+	}
+
+	// A recent check throttles: a stamp in the future window means not due, so
+	// MaybeBackgroundUpdate returns without overwriting it.
+	t.Setenv(EnvDisable, "")
+	stamp := time.Now().Add(-1 * time.Hour).UTC().Truncate(time.Second)
+	if err := writeLastCheck(stamp); err != nil {
+		t.Fatalf("writeLastCheck: %v", err)
+	}
+	MaybeBackgroundUpdate("0.1.0", 6*time.Hour)
+	if got := readLastCheck(); !got.Equal(stamp) {
+		t.Fatalf("throttled call rewrote stamp: got %v, want %v", got, stamp)
+	}
+}

@@ -3,16 +3,11 @@ import type { CountryStats, ImpactStats, ProgramStats } from "./types";
 export function formatBytes(value?: number): string {
   const n = Number(value || 0);
   if (n < 1024) return `${Math.round(n)} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
-  return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
-
-export function formatTokens(value?: number): string {
-  const n = Number(value || 0);
-  if (n < 1000) return `~${Math.round(n)}`;
-  if (n < 1_000_000) return `~${(n / 1000).toFixed(1)}K`;
-  return `~${(n / 1_000_000).toFixed(1)}M`;
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  if (n < 1024 ** 4) return `${(n / 1024 ** 3).toFixed(1)} GB`;
+  if (n < 1024 ** 5) return `${(n / 1024 ** 4).toFixed(1)} TB`;
+  return `${(n / 1024 ** 5).toFixed(1)} PB`;
 }
 
 export function formatCompact(value?: number): string {
@@ -20,7 +15,14 @@ export function formatCompact(value?: number): string {
   if (n < 1000) return formatInt(n);
   if (n < 1_000_000) return `${(n / 1000).toFixed(1)}K`;
   if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n < 1_000_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  return `${(n / 1_000_000_000_000).toFixed(1)}T`;
+}
+
+export function formatTokens(value?: number): string {
+  const n = Number(value || 0);
+  if (n < 1000) return `~${Math.round(n)}`;
+  return `~${formatCompact(n)}`;
 }
 
 export function formatInt(value?: number): string {
@@ -30,7 +32,9 @@ export function formatInt(value?: number): string {
 export function formatUsd(value?: number): string {
   const n = Math.round(Number(value || 0));
   if (n < 1_000_000) return `$${n.toLocaleString("en-US")}`;
-  return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n < 1_000_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n < 1_000_000_000_000) return `$${(n / 1_000_000_000).toFixed(1)}B`;
+  return `$${(n / 1_000_000_000_000).toFixed(1)}T`;
 }
 
 export function savedPct(saved?: number, raw?: number): number {

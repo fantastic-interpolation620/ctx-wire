@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadExcludeCommands(t *testing.T) {
@@ -36,6 +37,38 @@ func TestLoadOutputSection(t *testing.T) {
 	}
 	if !c.Output.UltraCompact {
 		t.Fatal("expected output.ultra_compact = true")
+	}
+}
+
+func TestUpdateAutoDefaultsOn(t *testing.T) {
+	t.Setenv(envConfig, filepath.Join(t.TempDir(), "config.toml"))
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !c.Update.AutoEnabled() {
+		t.Fatal("auto-update should default to enabled")
+	}
+	if c.Update.Interval() != 0 {
+		t.Fatalf("Interval() = %v, want 0 (package default)", c.Update.Interval())
+	}
+}
+
+func TestUpdateSectionParses(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(p, []byte("[update]\nauto = false\ninterval_hours = 12\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(envConfig, p)
+	c, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if c.Update.AutoEnabled() {
+		t.Fatal("auto = false should disable auto-update")
+	}
+	if got := c.Update.Interval(); got != 12*time.Hour {
+		t.Fatalf("Interval() = %v, want 12h", got)
 	}
 }
 

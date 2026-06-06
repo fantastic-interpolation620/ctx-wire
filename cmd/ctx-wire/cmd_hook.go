@@ -47,10 +47,11 @@ func cmdHook(args []string) int {
 func cmdRewrite(args []string) int {
 	if isHelpArg(args) {
 		printHelp(os.Stdout, helpDoc{
-			usage:   []string{"ctx-wire rewrite <command line>"},
+			usage:   []string{"ctx-wire rewrite [--agent <agent>] <command line>"},
 			summary: "Print how the hook would rewrite a shell command line (a debugging aid).",
 			examples: []string{
 				`ctx-wire rewrite "git status && ls -la | head"`,
+				`ctx-wire rewrite --agent opencode "git status"`,
 			},
 			notes: []string{
 				"Shows the rewrite only; it runs nothing. For the filter/mode decision, use `ctx-wire explain`.",
@@ -59,9 +60,30 @@ func cmdRewrite(args []string) int {
 		return 0
 	}
 	if len(args) == 0 {
-		usageLine(os.Stderr, "ctx-wire rewrite <command line>")
+		usageLine(os.Stderr, "ctx-wire rewrite [--agent <agent>] <command line>")
 		return 2
 	}
-	fmt.Println(rewrite.Line(strings.Join(args, " ")))
+	agentName := ""
+	if args[0] == "--agent" {
+		if len(args) < 3 {
+			usageLine(os.Stderr, "ctx-wire rewrite --agent <agent> <command line>")
+			return 2
+		}
+		agentName = args[1]
+		args = args[2:]
+	} else if strings.HasPrefix(args[0], "--agent=") {
+		agentName = strings.TrimPrefix(args[0], "--agent=")
+		args = args[1:]
+		if agentName == "" || len(args) == 0 {
+			usageLine(os.Stderr, "ctx-wire rewrite --agent <agent> <command line>")
+			return 2
+		}
+	}
+	line := strings.Join(args, " ")
+	if agentName != "" {
+		fmt.Println(rewrite.LineForAgent(line, agentName))
+		return 0
+	}
+	fmt.Println(rewrite.Line(line))
 	return 0
 }

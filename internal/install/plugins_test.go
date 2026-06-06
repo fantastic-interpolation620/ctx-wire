@@ -17,7 +17,9 @@ func TestInstallPi(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pi extension not written: %v", err)
 	}
-	if !strings.Contains(string(data), "ctx-wire") || !strings.Contains(string(data), "tool_call") {
+	if !strings.Contains(string(data), "ctx-wire") ||
+		!strings.Contains(string(data), `"--agent", "pi"`) ||
+		!strings.Contains(string(data), "tool_call") {
 		t.Errorf("pi extension content unexpected:\n%s", data)
 	}
 	if changed, err := InstallPi(path); err != nil || changed {
@@ -35,7 +37,9 @@ func TestInstallHermes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("__init__.py not written: %v", err)
 	}
-	if !strings.Contains(string(initPy), "pre_tool_call") || !strings.Contains(string(initPy), "ctx-wire") {
+	if !strings.Contains(string(initPy), "pre_tool_call") ||
+		!strings.Contains(string(initPy), `"--agent", "hermes"`) ||
+		!strings.Contains(string(initPy), "ctx-wire") {
 		t.Errorf("hermes __init__.py unexpected:\n%s", initPy)
 	}
 	manifest, err := os.ReadFile(filepath.Join(dir, "plugin.yaml"))

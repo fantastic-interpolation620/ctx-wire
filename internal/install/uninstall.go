@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 )
 
@@ -261,7 +260,7 @@ func UninstallMCP(path string) (bool, error) {
 	}
 	// Only remove entries that are ctx-wire's managed MCP server. A custom
 	// server under the same name is user data.
-	if !reflect.DeepEqual(existing, desiredMCPServer()) {
+	if !isManagedMCPServer(existing) {
 		return false, nil
 	}
 	delete(servers, mcpServerName)

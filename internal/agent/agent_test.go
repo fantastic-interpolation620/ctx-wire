@@ -72,10 +72,17 @@ func TestDetectFrom(t *testing.T) {
 
 func TestMatchAgent(t *testing.T) {
 	cases := map[string]string{
-		"/Users/x/.local/bin/claude":        "claude",
-		"node /opt/codex/index.js":          "codex",
-		"bash -c 'ctx-wire run git status'": "", // ctx-wire / shells must not match
-		"/bin/zsh":                          "",
+		"/Users/x/.local/bin/claude":                  "claude",
+		"node /opt/codex/index.js":                    "codex",
+		"/Applications/Visual Studio.app/devenv":      "visualstudio",
+		"/Applications/Visual Studio Code.app/code":   "vscode",
+		"node /Users/x/.opencode/bin/opencode":        "opencode",
+		"node /Users/x/.pi/agent/extensions/main.mjs": "pi",
+		"python -m hermes":                            "hermes",
+		"antigravity --workspace .":                   "antigravity",
+		"kilocode --run":                              "kilocode",
+		"bash -c 'ctx-wire run git status'":           "", // ctx-wire / shells must not match
+		"/bin/zsh":                                    "",
 	}
 	for cmd, want := range cases {
 		if got := matchAgent(cmd); got != want {

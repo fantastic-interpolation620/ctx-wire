@@ -23,6 +23,15 @@ func TestShimScriptDetectsAndExportsAgent(t *testing.T) {
 		"*cursor*) should_wire=1; detected_agent=cursor;",
 		"*gemini*) should_wire=1; detected_agent=gemini;",
 		"*copilot*) should_wire=1; detected_agent=copilot;",
+		"*windsurf*) should_wire=1; detected_agent=windsurf;",
+		"*cline*) should_wire=1; detected_agent=cline;",
+		"*kilocode*) should_wire=1; detected_agent=kilocode;",
+		"*antigravity*) should_wire=1; detected_agent=antigravity;",
+		"*opencode*) should_wire=1; detected_agent=opencode;",
+		`*pi-coding-agent*|*"pi coding agent"*|*/.pi/agent*) should_wire=1; detected_agent=pi;`,
+		"*hermes*) should_wire=1; detected_agent=hermes;",
+		`*vscode*|*"Visual Studio Code"*|*"visual studio code"*) should_wire=1; detected_agent=vscode;`,
+		`*visualstudio*|*"Visual Studio"*|*"visual studio"*) should_wire=1; detected_agent=visualstudio;`,
 		`if [ -z "${CTX_WIRE_AGENT:-}" ] && [ -n "${detected_agent:-}" ]; then`,
 		"export CTX_WIRE_AGENT",
 	} {
@@ -30,9 +39,37 @@ func TestShimScriptDetectsAndExportsAgent(t *testing.T) {
 			t.Fatalf("shim script missing %q:\n%s", want, script)
 		}
 	}
+	assertInOrder(t, script, []string{
+		"*claude*) should_wire=1; detected_agent=claude;",
+		"*codex*) should_wire=1; detected_agent=codex;",
+		"*cursor*) should_wire=1; detected_agent=cursor;",
+		"*gemini*) should_wire=1; detected_agent=gemini;",
+		"*copilot*) should_wire=1; detected_agent=copilot;",
+		"*windsurf*) should_wire=1; detected_agent=windsurf;",
+		"*cline*) should_wire=1; detected_agent=cline;",
+		"*kilocode*) should_wire=1; detected_agent=kilocode;",
+		"*antigravity*) should_wire=1; detected_agent=antigravity;",
+		"*opencode*) should_wire=1; detected_agent=opencode;",
+		`*pi-coding-agent*|*"pi coding agent"*|*/.pi/agent*) should_wire=1; detected_agent=pi;`,
+		"*hermes*) should_wire=1; detected_agent=hermes;",
+		`*vscode*|*"Visual Studio Code"*|*"visual studio code"*) should_wire=1; detected_agent=vscode;`,
+		`*visualstudio*|*"Visual Studio"*|*"visual studio"*) should_wire=1; detected_agent=visualstudio;`,
+	})
 	// agent-browser is wired but not attributed (it is a tool, not an agent).
 	if strings.Contains(script, "detected_agent=agent-browser") {
 		t.Fatalf("agent-browser should wire without being attributed as an agent:\n%s", script)
+	}
+}
+
+func assertInOrder(t *testing.T, haystack string, needles []string) {
+	t.Helper()
+	offset := 0
+	for _, needle := range needles {
+		idx := strings.Index(haystack[offset:], needle)
+		if idx < 0 {
+			t.Fatalf("expected %q after byte %d in shim script", needle, offset)
+		}
+		offset += idx + len(needle)
 	}
 }
 

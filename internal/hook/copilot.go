@@ -75,7 +75,7 @@ func copilotVSCode(data []byte, w io.Writer) error {
 	if in.ToolInput.Command == "" {
 		return nil
 	}
-	rewritten := rewrite.Line(in.ToolInput.Command)
+	rewritten := rewrite.LineForAgent(in.ToolInput.Command, "copilot")
 	if rewritten == in.ToolInput.Command {
 		return nil
 	}
@@ -104,7 +104,7 @@ func copilotCLI(data []byte, w io.Writer) error {
 	if args.Command == "" {
 		return nil
 	}
-	rewritten := rewrite.Line(args.Command)
+	rewritten := rewrite.LineForAgent(args.Command, "copilot")
 	if rewritten == args.Command {
 		return nil
 	}

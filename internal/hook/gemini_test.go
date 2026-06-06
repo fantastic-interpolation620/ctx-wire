@@ -12,7 +12,7 @@ func TestGeminiRewrite(t *testing.T) {
 	if err := Gemini(strings.NewReader(in), &out); err != nil {
 		t.Fatalf("Gemini: %v", err)
 	}
-	want := "{\"decision\":\"allow\",\"hookSpecificOutput\":{\"tool_input\":{\"command\":\"ctx-wire run git status\"}}}\n"
+	want := "{\"decision\":\"allow\",\"hookSpecificOutput\":{\"tool_input\":{\"command\":\"ctx-wire run --agent gemini git status\"}}}\n"
 	if out.String() != want {
 		t.Fatalf("output = %q, want %q", out.String(), want)
 	}

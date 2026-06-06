@@ -86,10 +86,10 @@ func TestUninstallIntegrationsPreservesUnrelatedConfig(t *testing.T) {
 	existingMCP := `{"servers":{"github":{"url":"https://example.invalid/mcp"}}}`
 	writeFile(t, vscodeMCP, existingMCP)
 	writeFile(t, visualStudioMCP, existingMCP)
-	if _, err := InstallMCP(vscodeMCP); err != nil {
+	if _, err := InstallMCP(vscodeMCP, "vscode"); err != nil {
 		t.Fatalf("InstallMCP vscode: %v", err)
 	}
-	if _, err := InstallMCP(visualStudioMCP); err != nil {
+	if _, err := InstallMCP(visualStudioMCP, "visualstudio"); err != nil {
 		t.Fatalf("InstallMCP visualstudio: %v", err)
 	}
 

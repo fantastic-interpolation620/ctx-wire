@@ -23,9 +23,15 @@ func TestCompareVersions(t *testing.T) {
 		{"v1.2.3", "1.2.4", -1}, // leading v ignored
 		{"1.2.0", "1.10.0", -1}, // numeric, not lexical
 		{"2.0.0", "1.9.9", 1},
-		{"dev", "0.1.0", -1},      // dev sorts below any release
-		{"0.1.0", "dev", 1},       // and vice versa
-		{"1.2.3-rc1", "1.2.3", 0}, // pre-release metadata dropped
+		{"dev", "0.1.0", -1},           // dev sorts below any release
+		{"0.1.0", "dev", 1},            // and vice versa
+		{"1.2.3-rc1", "1.2.3", -1},     // an RC is older than its stable release
+		{"1.2.3", "1.2.3-rc1", 1},      // and stable is newer than the RC
+		{"0.1.2-rc1", "0.1.2-rc2", -1}, // RCs order by identifier
+		{"0.1.2-rc2", "0.1.2-rc1", 1},  //
+		{"1.2.3-rc1", "1.2.3-rc1", 0},  // equal pre-releases
+		{"1.2.3+build", "1.2.3", 0},    // build metadata ignored for precedence
+		{"1.2.4-rc1", "1.2.3", 1},      // a higher core wins regardless of pre-release
 	}
 	for _, c := range cases {
 		if got := compareVersions(c.a, c.b); got != c.want {
@@ -43,6 +49,12 @@ func TestIsNewer(t *testing.T) {
 	}
 	if !isNewer("1.0.0", "1.0.1") {
 		t.Error("1.0.1 should be newer than 1.0.0")
+	}
+	if !isNewer("0.1.2-rc1", "0.1.2") {
+		t.Error("an RC dogfood should roll forward to its stable release")
+	}
+	if isNewer("0.1.2", "0.1.2-rc1") {
+		t.Error("a stable release must not downgrade to an RC")
 	}
 }
 

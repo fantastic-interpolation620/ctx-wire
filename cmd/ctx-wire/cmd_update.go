@@ -7,9 +7,10 @@ import (
 	"ctx-wire/internal/selfupdate"
 )
 
-// cmdUpdate upgrades ctx-wire to the latest public GitHub release. It is
-// explicit and opt-in: it never checks or updates on its own. --check reports
-// whether an update is available without installing it.
+// cmdUpdate upgrades ctx-wire to the latest public GitHub release on demand.
+// ctx-wire also self-updates in the background a few times a day on human-facing
+// commands; this command forces it now. --check reports whether an update is
+// available without installing it.
 func cmdUpdate(args []string) int {
 	if isHelpArg(args) {
 		printHelp(os.Stdout, helpDoc{
@@ -19,7 +20,7 @@ func cmdUpdate(args []string) int {
 				{"--check", "report whether an update is available, without installing it"},
 			},
 			notes: []string{
-				"Explicit and opt-in: ctx-wire never checks for updates on its own. Downloads from public GitHub releases.",
+				"ctx-wire self-updates in the background a few times a day; this forces an update now. Disable with `[update] auto = false` in config or CTX_WIRE_NO_AUTOUPDATE=1. Downloads from public GitHub releases.",
 			},
 		})
 		return 0

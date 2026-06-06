@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"ctx-wire/internal/agent"
 	"ctx-wire/internal/rewrite"
 )
 
@@ -68,7 +69,7 @@ func Codex(r io.Reader, w io.Writer) error {
 			},
 		})
 	}
-	rewritten := rewrite.Line(in.ToolInput.Command)
+	rewritten := rewrite.LineForAgent(in.ToolInput.Command, "codex")
 	if rewritten == in.ToolInput.Command {
 		return nil
 	}
@@ -82,8 +83,23 @@ func Codex(r io.Reader, w io.Writer) error {
 }
 
 func allowCodexPermissionCommand(command string) bool {
-	words := firstShellWords(command, 3)
-	return len(words) == 3 && words[0] == "ctx-wire" && words[1] == "run" && words[2] == "agent-browser"
+	words := firstShellWords(command, 5)
+	if len(words) < 3 || words[0] != "ctx-wire" || words[1] != "run" {
+		return false
+	}
+	i := 2
+	if words[i] == "--agent" {
+		if len(words) < 5 || agent.Normalize(words[3]) == "" {
+			return false
+		}
+		i = 4
+	} else if strings.HasPrefix(words[i], "--agent=") {
+		if agent.Normalize(strings.TrimPrefix(words[i], "--agent=")) == "" {
+			return false
+		}
+		i = 3
+	}
+	return len(words) > i && words[i] == "agent-browser"
 }
 
 func firstShellWords(command string, limit int) []string {

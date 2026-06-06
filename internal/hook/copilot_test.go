@@ -12,7 +12,7 @@ func TestCopilotVSCodeRewrite(t *testing.T) {
 	if err := Copilot(strings.NewReader(in), &out); err != nil {
 		t.Fatalf("Copilot: %v", err)
 	}
-	want := "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"ctx-wire rewrite\",\"updatedInput\":{\"command\":\"ctx-wire run git status\"}}}\n"
+	want := "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\",\"permissionDecisionReason\":\"ctx-wire rewrite\",\"updatedInput\":{\"command\":\"ctx-wire run --agent copilot git status\"}}}\n"
 	if out.String() != want {
 		t.Fatalf("output = %q, want %q", out.String(), want)
 	}
@@ -24,7 +24,7 @@ func TestCopilotCLIDenyWithSuggestion(t *testing.T) {
 	if err := Copilot(strings.NewReader(in), &out); err != nil {
 		t.Fatalf("Copilot: %v", err)
 	}
-	want := "{\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Token savings: use `ctx-wire run git status` instead\"}\n"
+	want := "{\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Token savings: use `ctx-wire run --agent copilot git status` instead\"}\n"
 	if out.String() != want {
 		t.Fatalf("output = %q, want %q", out.String(), want)
 	}
