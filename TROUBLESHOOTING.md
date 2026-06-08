@@ -1,0 +1,74 @@
+# ctx-wire troubleshooting & limitations
+
+Common problems and the things ctx-wire deliberately does not do. For the command
+list see [README.md](README.md#commands) and [COMMANDS.md](COMMANDS.md); for
+config and environment variables see [CONFIGURATION.md](CONFIGURATION.md).
+
+## Troubleshooting
+
+- **Hook not firing / commands not filtered.** Run `ctx-wire doctor`. If the
+  `PATH` check warns that `ctx-wire` resolves to a different binary, reinstall
+  (`ctx-wire init <agent>` or `just install`). If a hook shows "not installed", run
+  `ctx-wire init <agent>` and restart the agent so it reloads its hook config.
+- **Command is a pipeline, redirection, or shell builtin.** These pass through
+  unchanged by design (see Known limitations). `ctx-wire explain '<cmd>'` shows
+  the exact reason. Wrap the producer explicitly if you want it filtered, e.g.
+  `ctx-wire run rg TODO . | head`.
+- **Codex hook present but nothing happens.** Codex requires its hooks feature
+  enabled and the hook trusted. `ctx-wire doctor` reports the feature flag;
+  enable `[features] hooks = true` in `~/.codex/config.toml`, then run codex and
+  trust the hook via `/hooks`. ctx-wire never bypasses Codex trust.
+- **A rules-based agent still runs raw commands.** Cline, Windsurf, Kilo Code,
+  and Antigravity use rules files, not terminal hooks. They improve default
+  agent behavior, but the agent can still ignore the guidance. Use
+  `ctx-wire explain <cmd>` and explicit `ctx-wire run ...` when you need
+  certainty.
+- **VS Code / Visual Studio Copilot is not filtering.** MCP is opt-in: the agent
+  must choose ctx-wire's `run_command` or `read_file` tool. There is no
+  transparent interception for these (see Known limitations).
+- **`ctx-wire gain` is empty.** Nothing has been recorded yet in this window, or
+  recording is disabled (`CTX_WIRE_GAIN=0`). Make sure commands are actually
+  being routed through `ctx-wire run` (check with `ctx-wire doctor` and
+  `ctx-wire explain <cmd>`), then retry after some agent activity.
+- **Storage path not writable.** `ctx-wire doctor` reports gain/tee writability.
+  ctx-wire falls back to a per-user temp directory when the primary data dir is
+  unwritable (common in agent sandboxes), so capture keeps working; `gain`
+  reads both locations. A `[fail]` line means neither the primary nor the
+  fallback is writable.
+
+## Known limitations
+
+- **MCP and rules files are opt-in, not transparent.** MCP can only expose a
+  callable tool; it cannot replace an editor's built-in terminal. So for VS Code
+  and Visual Studio Copilot, the agent must choose ctx-wire's `run_command` or
+  `read_file` tool (steered by the tool descriptions). Cline, Windsurf, Kilo
+  Code, and Antigravity are prompt/rules guidance only. OpenCode, Pi, and Hermes
+  depend on their plugin surfaces. The hook-based agents (Claude Code, Cursor,
+  Codex, Gemini CLI) get transparent interception.
+- **Pipelines wrap only the final stage; redirections are passthrough.** For a
+  pipeline, ctx-wire wraps just the last stage (e.g. `rg TODO . | wc -l` becomes
+  `rg TODO . | ctx-wire run wc -l`), so the producers run raw and computing
+  consumers like `wc`/`grep`/`jq` still see the true stream while the
+  agent-facing final output is filtered. If the last stage is not wrappable (a
+  redirect, builtin, or subshell), the whole pipeline passes through unchanged. A
+  segment with a top-level `>`/`<` redirect is left unwrapped, because wrapping it
+  would route ctx-wire's output into the redirect target and change what you
+  capture. Subshells `(...)`, brace groups `{ ...; }`, and shell builtins/keywords
+  are passed through for the same safety reason. The rewriter is a conservative,
+  POSIX-ish recognizer, not a full shell parser; `ctx-wire explain` reports the
+  exact decision.
+- **JSON payloads are not reduced.** This is enforced by content, not just by
+  command: if a filter would truncate a complete, valid JSON document on stdout,
+  ctx-wire emits the document whole instead (up to ~1 MiB; a larger one is
+  replaced with a notice rather than cut mid-structure), because capping or
+  truncating JSON produces invalid output that breaks downstream parsers. So a
+  single-line JSON flowing through `cat`, a helper script, or a statusline stays
+  intact. Commands whose job is to compact JSON (`jq`) opt out with
+  `reduce_json = true` and keep capping. Known JSON commands (`go list -json`,
+  `terraform show -json`, the `tofu` equivalents) also have explicit passthrough
+  filters; their non-JSON variants are still compacted.
+- **Project filters require trust.** A project-local `.ctx-wire/filters.toml` is
+  ignored until you approve it with `ctx-wire trust` (recorded by SHA-256). If
+  the file changes after approval, it reverts to untrusted until re-approved.
+  Revoke approval at any time with `ctx-wire untrust`. Bad filter files are
+  skipped (fail-open) and never break a command.

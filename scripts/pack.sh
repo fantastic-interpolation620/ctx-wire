@@ -54,6 +54,11 @@ if [ "$GOOS" = "darwin" ] && command -v xattr >/dev/null 2>&1; then
 fi
 
 cp README.md "$STAGE/README.md"
+# Ship the docs the README links to, so its links resolve in the archive.
+cp COMMANDS.md "$STAGE/COMMANDS.md"
+cp CONFIGURATION.md "$STAGE/CONFIGURATION.md"
+cp TROUBLESHOOTING.md "$STAGE/TROUBLESHOOTING.md"
+cp DEVELOPMENT.md "$STAGE/DEVELOPMENT.md"
 if [ "$GOOS" = "windows" ]; then
 	cat > "$STAGE/INSTALL.txt" <<EOF
 ctx-wire $VERSION ($GOOS/$GOARCH)

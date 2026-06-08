@@ -1,0 +1,211 @@
+# ctx-wire commands
+
+The complete command list, plus deep dives on the diagnostic and integration
+commands. For the config file and environment variables see
+[CONFIGURATION.md](CONFIGURATION.md); for problems and known limitations see
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+## All commands
+
+| Command | What it does |
+|---|---|
+| `ctx-wire run <cmd> [args]` | Execute a command and filter/scrub its output |
+| `ctx-wire mcp` | Serve `run_command` and `read_file` filtering tools over MCP (stdio) |
+| `ctx-wire mcp-wrap -- <server>` | Transparently relay a stdio MCP server and measure per-tool token cost (experimental, no compression) |
+| `ctx-wire mcp-wrap install \| uninstall <server>` | Wrap (or revert) a server in your MCP config so its tool output is measured; backs up the config, needs an agent restart |
+| `ctx-wire hook <agent>` | Run as an agent pre-tool hook (reads JSON on stdin) |
+| `ctx-wire rewrite <line>` | Print the rewritten form of a shell command line |
+| `ctx-wire init <agent>` | Install the binary into `~/.local/bin`, add managed shims, and wire an agent (claude, cursor, codex, gemini, cline, windsurf, kilocode, antigravity, opencode, pi, hermes, copilot, vscode, visualstudio) |
+| `ctx-wire update [--check]` | Upgrade to the latest release (checksum-verified, atomic, with rollback); `--check` only reports |
+| `ctx-wire uninstall` | Remove the ctx-wire binary, managed shims, and only ctx-wire hook/config entries |
+| `ctx-wire trust` | Approve this project's `.ctx-wire/filters.toml` by hash |
+| `ctx-wire untrust` | Revoke trust for this project's `.ctx-wire/filters.toml` |
+| `ctx-wire gain` | Report token savings recorded so far |
+| `ctx-wire gain --since 1h` | Report only recent savings |
+| `ctx-wire gain --history [--top N]` | Recent commands, newest last (optionally cap to N) |
+| `ctx-wire gain --daily \| --weekly \| --monthly` | Savings grouped by period |
+| `ctx-wire gain --graph` | ASCII bar graph of daily saved bytes |
+| `ctx-wire gain --json \| --csv` | Export the summary/daily breakdown |
+| `ctx-wire gain --quota [--budget <tokens>] [--window <tokens>]` | Month-to-date savings vs a vendor-neutral token budget, with a per-agent split |
+| `ctx-wire gain clear` | Clear local gain history for a fresh dogfood window |
+| `ctx-wire explain <cmd>` | Diagnose how ctx-wire handles one command (filter, mode, hook) |
+| `ctx-wire inspect [n] \| --list` | Show raw-vs-filtered for a recent command, so you can audit what was removed (needs `[retention]`) |
+| `ctx-wire tune [--since 24h] [--top N]` | Higher-level filter improvement report from gain data (read-only) |
+| `ctx-wire discover [--since 24h] [--top N] [--all]` | Find agent commands (Claude/Codex transcripts) that escaped ctx-wire (read-only) |
+| `ctx-wire learn [--since D] [--all] [--min N] [--write]` | Mine Claude transcripts for failed->corrected commands; `--write` saves `.claude/rules/cli-corrections.md` |
+| `ctx-wire session [--since 24h] [--top N] [--all]` | Per-session ctx-wire adoption across agent transcripts (read-only) |
+| `ctx-wire tune preview` | Dry-run the sanitized bundle contents without writing files |
+| `ctx-wire tune bundle [--out PATH]` | Write a sanitized tune bundle archive for manual sharing |
+| `ctx-wire tune issue [--open]` | Print or open a sanitized GitHub issue draft |
+| `ctx-wire tune draft <program>` | Scaffold a starter filter for a program from a real captured transcript sample (`--preview`/`--write`) |
+| `ctx-wire filters pull <name> \| publish <name>` | Share filters: pull a community filter (parsed and inline-tested, installed untrusted) or package a local one |
+| `ctx-wire telemetry [status\|enable\|disable\|forget]` | Show or change anonymous aggregate telemetry status; `forget` withdraws consent and erases local data |
+| `ctx-wire doctor [--recent N]` | Check install/hooks/MCP/storage/trust health (read-only) |
+| `ctx-wire verify [filter]` | Run the built-in filter conformance tests |
+| `ctx-wire version` | Print version and build metadata |
+
+## Command details
+
+The diagnostic and integration commands, in more depth.
+
+## `ctx-wire explain`
+
+`explain` is diagnostic only and never changes anything.
+
+- `ctx-wire explain <cmd>` shows, without running it: whether the hook would
+  **wrap** the command in `ctx-wire run` or pass it through (and why: pipeline,
+  redirection, shell builtin/keyword, env-assignment, subshell, already
+  ctx-wire), and what the runner would then do (**filtered** by which filter,
+  **live passthrough** when no filter matches, or **inherited bypass** for
+  interactive/streaming commands).
+The cross-command token-opportunity report (grouping the biggest gaps into
+classes such as *missing filter*, *filtered but weak*, *common passthrough*, and
+*expected payload*) lives in `ctx-wire tune`, not here, so `explain` stays a
+single-command diagnostic. Running `ctx-wire explain` with no command prints its
+help and points you to `tune`.
+
+## `ctx-wire tune`
+
+`tune` is read-only and local-only: it never runs commands, reads raw output,
+captures samples, writes files, or makes network calls. It reads the recorded
+gain data and reuses `explain`'s classification to print a higher-level filter
+improvement report grouped into actionable sections:
+
+- **Missing filters**: passthrough commands that should be filtered (add a new
+  built-in filter, or broaden an existing one that did not match).
+- **Weak filters**: filtered tooling commands that save little.
+- **Payload commands**: source/search/diff/list output expected to stay large
+  (reported as expected payload, not a bad filter).
+- **Command-shape hints**: cross-cutting tips such as `rg`/`grep`/`ag`/`ack`
+  without `-n`, an unscoped `find`, a command that repeats absolute paths, or
+  a full ctx-wire tee log read that should use `head`, `tail`, or `sed -n`.
+
+Pipeline/redirect/interactive passthroughs (which ctx-wire cannot wrap) and
+non-actionable commands are acknowledged in footers rather than hidden. Use
+`ctx-wire tune --since 24h` to window the report and `ctx-wire tune --top N` to
+cap rows per section.
+
+`ctx-wire tune preview` is a dry run of what `tune bundle` would contain. It
+writes nothing, captures no raw command output, and makes no network calls. It
+prints the bundle manifest, the sanitized sample commands, and the privacy
+guarantees. The sanitizer reuses `scrub.Scrub`, replaces the user home with
+`$HOME` and the current project root with `$PROJECT` (matching only at path
+boundaries so names like `repository` are not mangled), compacts long absolute
+paths (keeping the trailing segments), and caps the displayed command length.
+
+`ctx-wire tune bundle [--out PATH]` writes a sanitized `.tar.gz` archive for
+manual sharing (default `ctx-wire-tune.tar.gz`). It captures no raw command
+output and makes no network calls; the only write is the archive itself, whose
+path is printed with a reminder to inspect it before sharing. The archive
+contains `summary.json` (counts, byte totals, window, version, OS/arch, filter
+and conformance counts, top classes), `report.txt` (the sanitized tune report),
+`suggestions.json`, `samples/commands.jsonl` (sanitized sample commands, one per
+line), and `privacy_report.txt`. Every exported command runs through the same
+sanitizer as `tune preview`.
+
+`ctx-wire tune issue` prints a Markdown GitHub issue body (suggested title,
+summary, top classes, suggestions, a privacy checklist, and bundle-attachment
+instructions) built from the same sanitized data. By default it is fully
+read-only: no files, no browser, no network. It supports `--since`, `--top`, and
+`--bundle PATH` (which only mentions an existing bundle path; it does not create
+one). `ctx-wire tune issue --open` opens GitHub's new-issue page with the title
+and body prefilled in your browser so you can review and submit manually:
+ctx-wire never calls the GitHub API, stores a token, or uploads anything. It
+takes `--repo owner/repo`, or best-effort infers the repo from `git remote
+get-url origin`; if the repo cannot be inferred or the prefilled URL would be too
+long, it prints the issue body instead of opening a browser.
+
+## `ctx-wire doctor`
+
+`doctor` is read-only. It reports the running binary and whether `ctx-wire` on
+your `PATH` is that same binary, whether managed command shims are installed and
+first on `PATH`, whether any shim captures have been recorded, which agent
+hooks/rules are installed (Claude, Cursor, Codex, Gemini, Cline, Windsurf,
+Kilo Code, Antigravity, OpenCode, Pi, Hermes, Copilot, plus Codex's
+hooks-feature flag), whether MCP config exists for VS Code / Visual Studio,
+whether the gain and tee directories are writable (with the sandbox fallback),
+and the project filter trust state. It prints counts only by default; pass
+`--recent N` (or `--verbose`) to also list the last N scrubbed commands. Exit
+code is `0` when healthy or only warnings, `1` for a broken install (unwritable
+storage, unloadable filter registry).
+
+## Integrations (`ctx-wire init <target>`)
+
+- **self**: copies the current binary to `~/.local/bin/ctx-wire` with executable
+  permissions and installs managed command shims next to it. The shims cover
+  common agent commands such as `git`, `rg`, `grep`, `cat`, `sed`, `head`,
+  `tail`, `sort`, `bun`, `npm`, `go`, and `cargo`. Existing non-ctx-wire files
+  are never overwritten, and ctx-wire only creates a shim when the real command
+  is already installed elsewhere on `PATH` (so it never makes `jq` or `git`
+  appear to exist). Normal terminal commands bypass ctx-wire and exec the real
+  tool directly, preserving native colors/progress behavior.
+- **Claude Code, Cursor, Codex, Gemini CLI, Cline, Windsurf, Kilo Code,
+  Antigravity, OpenCode, Pi, Hermes, Copilot, VS Code, Visual Studio**: each
+  agent init also installs the local binary and managed
+  command shims, so there is no separate shim step to remember. Each shim
+  removes its own directory from `PATH`, resolves the real command, and then
+  calls `ctx-wire run` with the real absolute path only when the process is
+  agent-marked (`CTX_WIRE_AGENT_SHIMS=1` / `CTX_WIRE_SHIMS=1`) or launched from
+  an agent-looking parent process. That avoids recursive shim calls and keeps
+  your ordinary terminal path native. Shim captures are counted in a scrubbed
+  local usage log so `ctx-wire doctor` can show whether they are actually being
+  exercised. To exempt an agent-spawned helper whose stdout must stay byte-exact
+  (a statusline command, a hook, an MCP subprocess), set
+  `CTX_WIRE_DISABLE_SHIMS=1` at the top of that script: it is the first check in
+  every shim, so the real command runs unwrapped. `ctx-wire run` already sets it
+  for the commands it wraps, so nested pipelines and helpers under a wrapped
+  command stay raw.
+- **Claude Code, Cursor, Codex, Gemini CLI**: transparent command rewrite via a
+  pre-tool hook. Codex additionally requires you to enable its hooks feature and
+  trust the hook (the command prints the exact steps; it never bypasses trust).
+  The Claude hook also respects your Bash permission rules: if a command matches
+  a `permissions.deny` or `permissions.ask` rule in your `settings.json`,
+  ctx-wire does **not** auto-approve the rewritten form. It steps aside so Claude
+  applies its own decision to the original command, instead of the wrapper hiding
+  the command from your deny/ask rules. Commands with no matching rule keep the
+  transparent allow-and-filter behavior.
+- **GitHub Copilot project integration**: writes `.github/copilot-instructions.md`
+  plus `.github/hooks/ctx-wire-rewrite.json`. VS Code-style hook payloads are
+  rewritten; Copilot CLI payloads get a deny-with-suggestion response because it
+  does not expose the same rewrite contract.
+- **Cline, Windsurf, Kilo Code, Antigravity**: prompt/rules guidance via
+  `.clinerules`, `.windsurfrules`, `.kilocode/rules/ctx-wire-rules.md`, and
+  `.agents/rules/antigravity-ctx-wire-rules.md`. These are not hook
+  interception; they steer the agent to use `ctx-wire run`.
+- **OpenCode, Pi, Hermes**: global plugin/extension files that call
+  `ctx-wire rewrite` so shell commands are routed through ctx-wire when the host
+  agent supports that plugin surface.
+- **VS Code Copilot, Visual Studio Copilot**: an MCP server entry pointing at
+  `ctx-wire mcp`.
+- **Uninstall**: `ctx-wire uninstall` removes managed shims, the local
+  `~/.local/bin/ctx-wire` binary, and only ctx-wire-owned hook entries, MCP
+  server keys, and instruction blocks. It then purges ctx-wire's own config and
+  data directories wholesale, so filters, trust records, gain logs, tee
+  captures, and telemetry config/state are all removed too. Unrelated hooks, MCP
+  servers, and rule-file content are left intact.
+
+## Filters and trust
+
+Filters are declarative TOML, loaded in priority order: trusted project
+`.ctx-wire/filters.toml`, then user `~/.config/ctx-wire/filters.toml`, then the
+built-in set. A project filter file is ignored until you approve it with
+`ctx-wire trust`. Bad filter files are skipped (fail-open) and never break a
+command.
+
+The built-in set covers build/test/install tools plus common agent inspection
+commands. High-volume filters include `npm`, `pnpm`, `yarn`, `bun`, and `deno`
+install/build/test commands, scoped `npm run build/lint/typecheck` style
+scripts, `jest`, `vitest`, `tsc`, `eslint`, `pyright`, `pylint`, `flake8`,
+`golangci-lint`, `cargo`, `go test/build/vet`, `pytest`, `ruff`, `mypy`,
+`python -m unittest`, `rspec`, `phpunit`, `pip`, `docker`, `kubectl`, `gh`,
+`brew`, `curl`, `wget`, `http`, `apt`, `dotnet test`, `mvn test`, and Gradle
+test. Inspection filters include `rg`, `grep`, `git grep`, `ag`, `ack`, `ls`,
+`eza`, `exa`, `lsd`, `find`, `tree`, `cat`, `sed`, `head`, `tail`, `nl`,
+`git status`, `git diff`, `git show`, `git log`, `env`, and `printenv`.
+Commands that can hide important detail, such as `cat` and `git diff`, are
+capped in the agent-facing output and keep a scrubbed full-output spool when a
+cap is hit.
+
+Recovery spools normally live under the local data directory. If an agent
+sandbox cannot write there, ctx-wire falls back to a per-user temp directory so
+the `[full output: ...]` hint still works during dogfood.
