@@ -13,14 +13,16 @@ import {
   countryCode,
   flagEmoji,
   formatBytes,
-  formatCompact,
+  formatCompact3,
   formatInt,
   formatTokens,
-  formatUsd,
+  formatTokens3,
+  formatUsdCents,
   topCountries,
 } from "../format";
 import { fadeUp, staggerContainer } from "../lib/variants";
 import type { ImpactStats } from "../types";
+import { AnimatedNumber } from "./animated-number";
 
 // Canonical cobe focus angles: rotate so a marker faces the camera.
 function focusAngles(lat: number, lng: number): { phi: number; theta: number } {
@@ -113,21 +115,28 @@ export function GlobePanel({ stats }: { stats: ImpactStats }) {
           className="mb-7 border-b border-line-soft pb-6"
         >
           <div className="grid grid-cols-2 gap-x-reachgap gap-y-6">
-            <ReachStat label="Countries" value={formatInt(rows.length)} />
+            <ReachStat
+              label="Countries"
+              value={rows.length}
+              format={formatInt}
+            />
             <ReachStat
               label="Commands filtered"
-              value={formatCompact(Number(totals.commands || 0))}
+              value={Number(totals.commands || 0)}
+              format={formatCompact3}
             />
             <ReachStat
               label="Tokens saved"
-              value={formatTokens(Number(totals.tokens_saved || 0))}
+              value={Number(totals.tokens_saved || 0)}
+              format={formatTokens3}
             />
             <ReachStat
               label="$ saved · est."
-              value={formatUsd(
+              value={
                 (Number(totals.tokens_saved || 0) / 1_000_000) *
-                  TOKEN_PRICE_PER_M
-              )}
+                TOKEN_PRICE_PER_M
+              }
+              format={formatUsdCents}
             />
           </div>
           <p className="m-0 mt-3 font-mono text-2xs text-label">
@@ -172,7 +181,10 @@ export function GlobePanel({ stats }: { stats: ImpactStats }) {
             onUserRotate={() => setFocus(null)}
           />
         ) : (
-          <div className="relative z-10 aspect-square w-5/6" aria-hidden="true" />
+          <div
+            className="relative z-10 aspect-square w-5/6"
+            aria-hidden="true"
+          />
         )}
         <div className="readout-glass absolute bottom-2 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full px-3 py-1 font-mono text-2xs tracking-wide text-label">
           <span className="readout-dot size-1.5 rounded-full bg-green motion-safe:animate-pulse-dot" />
@@ -184,12 +196,22 @@ export function GlobePanel({ stats }: { stats: ImpactStats }) {
   );
 }
 
-function ReachStat({ label, value }: { label: string; value: string }) {
+function ReachStat({
+  format,
+  label,
+  value,
+}: {
+  format: (n: number) => string;
+  label: string;
+  value: number;
+}) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-mono text-reach font-bold tabular-nums text-head">
-        {value}
-      </span>
+      <AnimatedNumber
+        value={value}
+        format={format}
+        className="font-mono text-reach font-bold tabular-nums text-head"
+      />
       <span className="font-mono text-2xs uppercase tracking-widest text-label">
         {label}
       </span>

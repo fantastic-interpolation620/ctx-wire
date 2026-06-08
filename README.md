@@ -40,17 +40,17 @@ rollback) on macOS, Linux, and Windows.
 
 ## Documentation
 
-- **[COMMANDS.md](COMMANDS.md)** — every command, with deep dives on `explain`,
+- **[COMMANDS.md](COMMANDS.md)** - every command, with deep dives on `explain`,
   `tune`, `doctor`, the agent integrations behind `init`, and filters & trust.
-- **[CONFIGURATION.md](CONFIGURATION.md)** — `config.toml`, gain storage,
+- **[CONFIGURATION.md](CONFIGURATION.md)** - `config.toml`, gain storage,
   telemetry, and environment variables.
 - **[FILTERS.md](FILTERS.md)** covers writing your own filters: the TOML schema,
   the transform pipeline, inline tests, and the publish flow.
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** — common problems and known
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - common problems and known
   limitations.
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** — build from source, the `just` tasks, and
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** - build from source, the `just` tasks, and
   release packaging.
-- **[ctx-wire.dev](https://ctx-wire.dev)** — website and impact stats.
+- **[ctx-wire.dev](https://ctx-wire.dev)** - website and impact stats.
 
 ## Backed by
 

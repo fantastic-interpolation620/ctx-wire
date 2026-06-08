@@ -25,6 +25,33 @@ export function formatTokens(value?: number): string {
   return `~${formatCompact(n)}`;
 }
 
+// formatCompact3 mirrors formatCompact but keeps three decimals, so a count-up
+// shows the thousandths moving (e.g. 1.139M) instead of resting on a rounded
+// 1.1M that only twitches every 100k.
+export function formatCompact3(value?: number): string {
+  const n = Number(value || 0);
+  if (n < 1000) return formatInt(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(3)}K`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(3)}M`;
+  if (n < 1_000_000_000_000) return `${(n / 1_000_000_000).toFixed(3)}B`;
+  return `${(n / 1_000_000_000_000).toFixed(3)}T`;
+}
+
+export function formatTokens3(value?: number): string {
+  const n = Number(value || 0);
+  if (n < 1000) return `~${Math.round(n)}`;
+  return `~${formatCompact3(n)}`;
+}
+
+// formatUsdCents keeps cents so the figure moves on small token deltas (at
+// $3/1M, 10k tokens = $0.03) instead of sitting on a whole-dollar value.
+export function formatUsdCents(value?: number): string {
+  return `$${Number(value || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 export function formatInt(value?: number): string {
   return Math.round(Number(value || 0)).toLocaleString("en-US");
 }
