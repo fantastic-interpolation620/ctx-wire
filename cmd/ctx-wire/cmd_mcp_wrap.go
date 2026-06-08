@@ -268,6 +268,32 @@ func (m *mcpMeasure) report() {
 			name := filepath.Join(dir, "mcp-measure-"+time.Now().UTC().Format("20060102-150405")+".txt")
 			_ = os.WriteFile(name, b, 0o600)
 			fmt.Fprintf(os.Stderr, "(saved to %s)\n", name)
+			m.appendCumulative(dir)
 		}
+	}
+}
+
+// appendCumulative appends this session's per-tool measurements to a cumulative
+// JSONL log (mcp-measure.jsonl) so the Phase-0 dataset accumulates across
+// sessions instead of scattering into one file per run. Sum it across all
+// sessions with e.g. `jq -s 'group_by(.tool) | map({tool: .[0].tool, calls:
+// (map(.calls)|add), bytes: (map(.bytes)|add)})'`. Caller holds m.mu;
+// best-effort, a write failure never affects the relay.
+func (m *mcpMeasure) appendCumulative(dir string) {
+	f, err := os.OpenFile(filepath.Join(dir, "mcp-measure.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	ts := time.Now().UTC().Format(time.RFC3339)
+	enc := json.NewEncoder(f)
+	for name, st := range m.tools {
+		_ = enc.Encode(struct {
+			TS     string `json:"ts"`
+			Tool   string `json:"tool"`
+			Calls  int    `json:"calls"`
+			Bytes  int    `json:"bytes"`
+			Tokens int    `json:"approx_tokens"`
+		}{ts, name, st.calls, st.resultByte, st.resultByte / 4})
 	}
 }
