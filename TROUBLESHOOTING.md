@@ -10,6 +10,14 @@ config and environment variables see [CONFIGURATION.md](CONFIGURATION.md).
   `PATH` check warns that `ctx-wire` resolves to a different binary, reinstall
   (`ctx-wire init <agent>` or `just install`). If a hook shows "not installed", run
   `ctx-wire init <agent>` and restart the agent so it reloads its hook config.
+- **Commands fail or the agent errors after an upgrade (`EAGAIN` /
+  `posix_spawn`, a process storm, or "command not found").** An upgrade replaces
+  the ctx-wire binary but not the PATH shims, so a duplicate or stale install can
+  leave old shims on PATH that misbehave. ctx-wire self-heals this: it
+  regenerates managed shims to the current template on the next human-facing
+  command (`doctor`, `gain`, `version`, `update`). `ctx-wire doctor` also reports
+  duplicate ctx-wire binaries or shim dirs on PATH, and `ctx-wire init <agent>`
+  regenerates the shims immediately.
 - **Command is a pipeline, redirection, or shell builtin.** These pass through
   unchanged by design (see Known limitations). `ctx-wire explain '<cmd>'` shows
   the exact reason. Wrap the producer explicitly if you want it filtered, e.g.
@@ -57,6 +65,13 @@ config and environment variables see [CONFIGURATION.md](CONFIGURATION.md).
   are passed through for the same safety reason. The rewriter is a conservative,
   POSIX-ish recognizer, not a full shell parser; `ctx-wire explain` reports the
   exact decision.
+- **Commands that hide another command are passed through, not rewritten.** A
+  command with command/process substitution (`$(...)`, backticks, `<(...)`), or a
+  second command smuggled in via a newline or a background `&`, is left unwrapped
+  so the host agent evaluates the original itself. ctx-wire will not auto-approve
+  or filter a command whose embedded command it cannot attest, so e.g.
+  `git log --pretty=$(...)` runs raw rather than through a filter. Plain variable
+  expansion (`$VAR`, `${VAR}`) and fd redirects (`2>&1`) are unaffected.
 - **JSON payloads are not reduced.** This is enforced by content, not just by
   command: if a filter would truncate a complete, valid JSON document on stdout,
   ctx-wire emits the document whole instead (up to ~1 MiB; a larger one is

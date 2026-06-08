@@ -22,7 +22,8 @@ commands. For the config file and environment variables see
 | `ctx-wire untrust` | Revoke trust for this project's `.ctx-wire/filters.toml` |
 | `ctx-wire gain` | Report token savings recorded so far |
 | `ctx-wire gain --since 1h` | Report only recent savings |
-| `ctx-wire gain --history [--top N]` | Recent commands, newest last (optionally cap to N) |
+| `ctx-wire gain --history [--top N] [--agent <name>]` | Recent commands (time, invoking agent, savings, full command), newest last |
+| `ctx-wire gain --agent <name>` | Keep only one invoking agent's commands; composes with any view (e.g. `--history`, `--daily`) |
 | `ctx-wire gain --daily \| --weekly \| --monthly` | Savings grouped by period |
 | `ctx-wire gain --graph` | ASCII bar graph of daily saved bytes |
 | `ctx-wire gain --json \| --csv` | Export the summary/daily breakdown |
