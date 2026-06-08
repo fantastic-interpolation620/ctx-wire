@@ -82,6 +82,15 @@ func LineForAgent(line, agentName string) string {
 // lineWith rewrites a command line using wrap as the wrap prefix for each
 // rewritable segment (the default "ctx-wire run ", or an agent-scoped variant).
 func lineWith(line, wrap string) string {
+	// Safety gate: never rewrite a line that hides a command we cannot attest
+	// (command/process substitution, or an extra top-level command smuggled in
+	// via a newline or background &). Returning it unchanged makes every hook
+	// fall through to passthrough, so the agent evaluates the original command
+	// instead of ctx-wire vouching for a construct it never inspected. Plain
+	// redirects are not gated here; they hide no command and pass through anyway.
+	if ContainsUnattestableConstruct(line) {
+		return line
+	}
 	segments, seps := splitTopLevel(line)
 	for i, seg := range segments {
 		segments[i] = rewriteSegment(seg, wrap)
@@ -519,6 +528,7 @@ const (
 	ReasonShellCommandString = "shell command string"
 	ReasonDynamicCommand     = "dynamic command"
 	ReasonExcluded           = "excluded by config"
+	ReasonUnattestable       = "unattestable shell construct"
 )
 
 // passReason returns the reason a segment is left unwrapped (a Reason* constant,

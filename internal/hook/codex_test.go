@@ -137,3 +137,22 @@ func TestCodexDoesNotAutoAllowInvalidAgentFlag(t *testing.T) {
 		t.Errorf("expected no output for invalid agent flag, got %q", out.String())
 	}
 }
+
+func TestCodexDoesNotAutoAllowUnattestableAgentBrowser(t *testing.T) {
+	// The wrapped agent-browser command is allowlisted, but it hides a command
+	// substitution the shell will run; the PermissionRequest must NOT auto-allow.
+	payload := `{
+	  "hook_event_name": "PermissionRequest",
+	  "tool_name": "Bash",
+	  "tool_input": {
+	    "command": "ctx-wire run agent-browser eval $(rm -rf /tmp/x)"
+	  }
+	}`
+	var out bytes.Buffer
+	if err := Codex(strings.NewReader(payload), &out); err != nil {
+		t.Fatalf("Codex: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("expected no output for unattestable wrapped command, got %q", out.String())
+	}
+}

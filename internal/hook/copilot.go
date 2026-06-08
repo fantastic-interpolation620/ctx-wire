@@ -47,7 +47,7 @@ type copilotUpdatedInput struct {
 // payloads. VS Code can rewrite transparently. Copilot CLI cannot update input
 // today, so it receives a deny-with-suggestion response.
 func Copilot(r io.Reader, w io.Writer) error {
-	data, err := io.ReadAll(r)
+	data, err := readHookInput(r)
 	if err != nil {
 		return nil
 	}

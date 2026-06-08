@@ -26,20 +26,20 @@ func TestCursorGoldenRewrite(t *testing.T) {
 	}
 }
 
-func TestCursorNoopForBuiltin(t *testing.T) {
+func TestCursorAbstainsForBuiltin(t *testing.T) {
 	var out bytes.Buffer
 	if err := Cursor(strings.NewReader(`{"tool_name":"Shell","tool_input":{"command":"cd /tmp"}}`), &out); err != nil {
 		t.Fatalf("Cursor: %v", err)
 	}
-	assertAllowNoRewrite(t, out.Bytes())
+	assertAbstain(t, out.Bytes())
 }
 
-func TestCursorNoopForNonShell(t *testing.T) {
+func TestCursorAbstainsForNonShell(t *testing.T) {
 	var out bytes.Buffer
 	if err := Cursor(strings.NewReader(`{"tool_name":"Read","tool_input":{"command":"x"}}`), &out); err != nil {
 		t.Fatalf("Cursor: %v", err)
 	}
-	assertAllowNoRewrite(t, out.Bytes())
+	assertAbstain(t, out.Bytes())
 }
 
 func TestCursorFailsOpenOnGarbage(t *testing.T) {
@@ -47,20 +47,20 @@ func TestCursorFailsOpenOnGarbage(t *testing.T) {
 	if err := Cursor(strings.NewReader("}{ not json"), &out); err != nil {
 		t.Fatalf("Cursor: %v", err)
 	}
-	// Must still emit a valid "allow" so a parse failure never blocks a command.
-	assertAllowNoRewrite(t, out.Bytes())
+	// Must still emit valid JSON and not block; abstaining lets Cursor decide.
+	assertAbstain(t, out.Bytes())
 }
 
-// assertAllowNoRewrite checks the output is a valid {"permission":"allow"} with
-// no updated_input (i.e. a passthrough that does not block).
-func assertAllowNoRewrite(t *testing.T, data []byte) {
+// assertAbstain checks the output is a valid `{}` with no permission and no
+// updated_input: ctx-wire vouches for nothing and lets Cursor's own flow decide.
+func assertAbstain(t *testing.T, data []byte) {
 	t.Helper()
 	var got cursorOutput
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("output not valid JSON: %v\n%s", err, data)
 	}
-	if got.Permission != "allow" {
-		t.Errorf("permission = %q, want allow", got.Permission)
+	if got.Permission != "" {
+		t.Errorf("permission = %q, want empty (abstain)", got.Permission)
 	}
 	if got.UpdatedInput != nil {
 		t.Errorf("expected no updated_input, got %+v", got.UpdatedInput)

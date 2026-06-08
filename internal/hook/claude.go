@@ -39,7 +39,7 @@ type claudeUpdatedInput struct {
 // w; otherwise it writes nothing (no-op passthrough). It never returns a
 // blocking error.
 func Claude(r io.Reader, w io.Writer) error {
-	data, err := io.ReadAll(r)
+	data, err := readHookInput(r)
 	if err != nil {
 		return nil // fail open
 	}

@@ -22,8 +22,18 @@ type LineExplain struct {
 // line and why. It reuses the same passReason logic the rewriter uses, so the
 // explanation can never drift from the actual rewrite behavior.
 func Explain(line string) LineExplain {
-	segs, _ := splitTopLevel(line)
 	le := LineExplain{Original: line, Result: Line(line)}
+	// A line with an unattestable construct is passed through whole (lineWith
+	// refuses to rewrite it), so report it as one passthrough rather than per
+	// segment, keeping Explain consistent with the actual rewrite.
+	if ContainsUnattestableConstruct(line) {
+		le.Segments = append(le.Segments, SegmentExplain{
+			Command: strings.TrimSpace(line),
+			Reason:  ReasonUnattestable,
+		})
+		return le
+	}
+	segs, _ := splitTopLevel(line)
 	for _, seg := range segs {
 		core := strings.TrimSpace(seg)
 		if core == "" {

@@ -44,7 +44,7 @@ type codexDecisionWrapper struct {
 // malformed input is a silent passthrough so Codex's normal permission flow
 // remains in charge.
 func Codex(r io.Reader, w io.Writer) error {
-	data, err := io.ReadAll(r)
+	data, err := readHookInput(r)
 	if err != nil {
 		return nil // fail open
 	}
@@ -56,7 +56,12 @@ func Codex(r io.Reader, w io.Writer) error {
 		return nil
 	}
 	if in.HookEventName == "PermissionRequest" {
-		if !allowCodexPermissionCommand(in.ToolInput.Command) {
+		// This branch auto-approves allowlisted ctx-wire-wrapped agent-browser
+		// commands without going through the rewriter, so it must run the same
+		// gate: an allowlisted command that hides another command (e.g.
+		// `agent-browser eval $(rm -rf ~)`) must NOT be auto-approved. Fall through
+		// to Codex's own permission flow instead.
+		if !allowCodexPermissionCommand(in.ToolInput.Command) || rewrite.ContainsUnattestableConstruct(in.ToolInput.Command) {
 			return nil
 		}
 		return json.NewEncoder(w).Encode(codexOutput{

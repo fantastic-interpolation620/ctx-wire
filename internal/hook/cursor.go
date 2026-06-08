@@ -15,7 +15,7 @@ type cursorInput struct {
 }
 
 type cursorOutput struct {
-	Permission   string              `json:"permission"`
+	Permission   string              `json:"permission,omitempty"`
 	UpdatedInput *cursorUpdatedInput `json:"updated_input,omitempty"`
 }
 
@@ -25,27 +25,31 @@ type cursorUpdatedInput struct {
 
 // Cursor handles a Cursor preToolUse payload for the Shell tool. If the command
 // is rewritable it returns permission "allow" with updated_input carrying the
-// rewritten command; otherwise it returns a plain "allow" (no-op passthrough).
-// It always emits valid JSON and never blocks: on malformed input it still
-// returns "allow" so a parse failure can never deny a command.
+// rewritten command. Otherwise it ABSTAINS (emits `{}` with no permission), so
+// Cursor's own permission flow decides: ctx-wire only auto-approves a command it
+// actually rewrites, never one it merely passes through. Cursor's `permission:
+// "allow"` means "execute without asking", so emitting it on passthrough would
+// override the user's own ask rules for every command. It always emits valid
+// JSON and never denies: a parse failure abstains, so it can never block a
+// command.
 func Cursor(r io.Reader, w io.Writer) error {
-	allow := func() error {
-		return json.NewEncoder(w).Encode(cursorOutput{Permission: "allow"})
+	abstain := func() error {
+		return json.NewEncoder(w).Encode(cursorOutput{})
 	}
-	data, err := io.ReadAll(r)
+	data, err := readHookInput(r)
 	if err != nil {
-		return allow()
+		return abstain()
 	}
 	var in cursorInput
 	if err := json.Unmarshal(data, &in); err != nil {
-		return allow()
+		return abstain()
 	}
 	if in.ToolName != "Shell" || in.ToolInput.Command == "" {
-		return allow()
+		return abstain()
 	}
 	rewritten := rewrite.LineForAgent(in.ToolInput.Command, "cursor")
 	if rewritten == in.ToolInput.Command {
-		return allow()
+		return abstain() // builtin, redirect, unattestable, ...: let Cursor decide
 	}
 	return json.NewEncoder(w).Encode(cursorOutput{
 		Permission:   "allow",

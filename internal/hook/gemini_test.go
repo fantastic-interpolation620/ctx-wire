@@ -18,23 +18,24 @@ func TestGeminiRewrite(t *testing.T) {
 	}
 }
 
-func TestGeminiAllowForPassthrough(t *testing.T) {
+func TestGeminiAbstainsForPassthrough(t *testing.T) {
 	var out bytes.Buffer
 	in := `{"tool_name":"run_shell_command","tool_input":{"command":"cd /tmp"}}`
 	if err := Gemini(strings.NewReader(in), &out); err != nil {
 		t.Fatalf("Gemini: %v", err)
 	}
-	if got := out.String(); got != "{\"decision\":\"allow\"}\n" {
-		t.Fatalf("output = %q", got)
+	// Abstain: no decision, so Gemini's own permission flow applies.
+	if got := out.String(); got != "{}\n" {
+		t.Fatalf("output = %q, want abstain {}", got)
 	}
 }
 
-func TestGeminiFailsOpenWithAllowOnGarbage(t *testing.T) {
+func TestGeminiFailsOpenWithAbstainOnGarbage(t *testing.T) {
 	var out bytes.Buffer
 	if err := Gemini(strings.NewReader("not-json"), &out); err != nil {
 		t.Fatalf("Gemini: %v", err)
 	}
-	if got := out.String(); got != "{\"decision\":\"allow\"}\n" {
-		t.Fatalf("output = %q", got)
+	if got := out.String(); got != "{}\n" {
+		t.Fatalf("output = %q, want abstain {}", got)
 	}
 }
