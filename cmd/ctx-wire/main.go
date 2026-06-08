@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 
 	"ctx-wire/internal/commandpolicy"
 	"ctx-wire/internal/config"
 	"ctx-wire/internal/filter"
+	"ctx-wire/internal/install"
 	"ctx-wire/internal/recent"
 	"ctx-wire/internal/runner"
 	"ctx-wire/internal/selfupdate"
+	"ctx-wire/internal/shim"
 	"ctx-wire/internal/ui"
 )
 
@@ -76,6 +79,7 @@ func main() {
 			selfupdate.MaybeBackgroundUpdate(version, cfg.Update.Interval())
 		}
 	}
+	maybeRefreshManagedShims(os.Args[1])
 	switch os.Args[1] {
 	case "run":
 		os.Exit(cmdRun(os.Args[2:]))
@@ -133,6 +137,36 @@ func main() {
 		usage(os.Stderr)
 		os.Exit(2)
 	}
+}
+
+func maybeRefreshManagedShims(subcommand string) {
+	switch subcommand {
+	case "doctor", "gain", "update", "version":
+	default:
+		return
+	}
+	ctxWire, ok := stableCurrentBinaryPath()
+	if !ok {
+		return
+	}
+	_ = shim.RefreshManaged(ctxWire)
+}
+
+func stableCurrentBinaryPath() (string, bool) {
+	if version == "" || version == "dev" {
+		return "", false
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", false
+	}
+	if found, err := exec.LookPath("ctx-wire"); err == nil && sameExecutablePath(found, exe) {
+		return found, true
+	}
+	if dest, err := install.SelfInstallPath(); err == nil && sameExecutablePath(dest, exe) {
+		return dest, true
+	}
+	return "", false
 }
 
 var knownCommands = []string{

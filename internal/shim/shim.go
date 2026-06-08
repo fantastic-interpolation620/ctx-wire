@@ -667,6 +667,64 @@ func ManagedShimDirsOnPATH() []string {
 	return dirs
 }
 
+// RefreshManaged regenerates every ctx-wire-managed shim in the managed shim
+// dirs on PATH so they match the CURRENT template. A binary upgrade (manual
+// update, auto-update, or curl install) replaces the binary but never the PATH
+// shims, so a user who upgraded from a pre-guard release is left with stale
+// shims that lack the recursion backstops and can fork-bomb. Healing them here,
+// from a human-facing command, closes that gap without a manual re-init.
+//
+// ctxWire is the absolute path the shims should invoke (the running binary). It
+// rewrites ALL managed shim dirs on PATH (so a duplicate install is healed too),
+// touches only managed shims whose content differs, and is best-effort: a
+// failure on one shim never stops the rest. It returns the count rewritten.
+func RefreshManaged(ctxWire string) int {
+	absCtxWire, err := filepath.Abs(ctxWire)
+	if err != nil {
+		return 0
+	}
+	refreshed := 0
+	for _, dir := range ManagedShimDirsOnPATH() {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			path := filepath.Join(dir, e.Name())
+			if !isManagedShimFile(path) {
+				continue
+			}
+			cmd := shimCommandName(e.Name())
+			if cmd == "" {
+				continue
+			}
+			want := shimScript(cmd, absCtxWire)
+			if cur, err := os.ReadFile(path); err == nil && string(cur) == want {
+				continue // already current
+			}
+			if writeExecutable(path, []byte(want)) == nil {
+				refreshed++
+			}
+		}
+	}
+	return refreshed
+}
+
+// shimCommandName derives the command name from a managed shim file name,
+// stripping the Windows .cmd suffix.
+func shimCommandName(fileName string) string {
+	if runtime.GOOS == "windows" {
+		if !strings.HasSuffix(fileName, ".cmd") {
+			return ""
+		}
+		return strings.TrimSuffix(fileName, ".cmd")
+	}
+	return fileName
+}
+
 func samePath(a, b string) bool {
 	return cleanPath(a) == cleanPath(b)
 }
