@@ -41,7 +41,7 @@ const CAPS = [
     desc: "Savings split by agent (Claude, Codex, Cursor, Gemini, Copilot).",
   },
   {
-    name: "142 filters · 326 tests",
+    name: "142 filters · 320+ tests",
     desc: "Declarative TOML corpus, conformance-tested every release.",
   },
   {
