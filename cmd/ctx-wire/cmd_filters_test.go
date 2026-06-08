@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,6 +116,30 @@ strip_lines_matching = ["^\\s*$"]
 	// An explicit http:// registry must be refused before any fetch.
 	if code := cmdFiltersPull([]string{"notest", "--registry", "http://example.invalid/reg"}); code != 1 {
 		t.Errorf("an http:// registry must be refused, got exit %d", code)
+	}
+}
+
+func TestFetchURLRejectsOversize(t *testing.T) {
+	// A remote registry serving a body larger than the cap must be rejected, not
+	// silently truncated to a valid-looking 1 MiB prefix and installed.
+	big := bytes.Repeat([]byte("a"), maxFilterBytes+10)
+	srvBig := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(big)
+	}))
+	defer srvBig.Close()
+	if _, err := fetchURL(srvBig.URL + "/x.toml"); err == nil {
+		t.Error("fetchURL must reject a body larger than maxFilterBytes")
+	}
+
+	// A within-cap body comes back intact.
+	small := []byte("schema_version = 1\n")
+	srvSmall := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(small)
+	}))
+	defer srvSmall.Close()
+	got, err := fetchURL(srvSmall.URL + "/x.toml")
+	if err != nil || !bytes.Equal(got, small) {
+		t.Errorf("fetchURL small = %q, %v; want %q", got, err, small)
 	}
 }
 

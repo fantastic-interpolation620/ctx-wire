@@ -19,7 +19,8 @@ import (
 
 // defaultRegistry is the community filter registry. A registry is a directory of
 // standalone <name>.toml filter files (each with schema_version = 1 and inline
-// [[tests]]); it can be an http(s) base URL or a local directory path.
+// [[tests]]); it can be an https base URL or a local directory path (http:// is
+// rejected so filter content cannot be substituted in flight).
 const defaultRegistry = "https://raw.githubusercontent.com/pivanov/ctx-wire-filters/main"
 
 const maxFilterBytes = 1 << 20
@@ -39,7 +40,21 @@ var fetchURL = func(url string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("registry returned %s", resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, maxFilterBytes))
+	return readCapped(resp.Body)
+}
+
+// readCapped reads up to maxFilterBytes from r and rejects anything larger, so an
+// oversize file is never silently truncated to a valid-looking prefix. It reads
+// one byte past the cap: if that byte exists, the file is too big.
+func readCapped(r io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxFilterBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxFilterBytes {
+		return nil, fmt.Errorf("filter file exceeds %d bytes", maxFilterBytes)
+	}
+	return data, nil
 }
 
 func cmdFilters(args []string) int {
@@ -96,14 +111,7 @@ func fetchFilter(registry, name string) ([]byte, error) {
 		return nil, err
 	}
 	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, maxFilterBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > maxFilterBytes {
-		return nil, fmt.Errorf("filter file exceeds %d bytes", maxFilterBytes)
-	}
-	return data, nil
+	return readCapped(f)
 }
 
 func cmdFiltersPull(args []string) int {
@@ -136,7 +144,7 @@ func cmdFiltersPull(args []string) int {
 		return 2
 	}
 	// Validate the name before it is interpolated into a path or URL, so a name
-	// like "../../etc/passwd" cannot traverse a local registry or escape an http
+	// like "../../etc/passwd" cannot traverse a local registry or escape an https
 	// base URL.
 	if !validFilterName(name) {
 		fmt.Fprintf(os.Stderr, "ctx-wire filters pull: invalid filter name %q (use lowercase letters, digits, and -)\n", name)
