@@ -30,3 +30,9 @@ FAILED tests/test_app.py::test_thing - AssertionError: nope
 =========================== 1 failed, 11 passed in 0.4s ===========================
 """
 expected = "FAILED tests/test_app.py::test_thing - AssertionError: nope\n=========================== 1 failed, 11 passed in 0.4s ==========================="
+
+[[tests.pytest]]
+name = "failed exit is not collapsed to a 'pytest: ok' summary"
+failed = true
+input = "===== 5 passed in 0.30s ====="
+expected = "===== 5 passed in 0.30s ====="

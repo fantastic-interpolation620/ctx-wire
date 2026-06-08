@@ -91,6 +91,11 @@ type tomlTest struct {
 	// author trims expected and removes the marker; a built-in must never ship
 	// with it set.
 	Draft bool `toml:"draft"`
+	// Failed runs the case as the runner does for a non-zero exit code: it
+	// suppresses synthetic-success messages (match_output / on_empty) and keeps
+	// the tail on truncation. Use it to assert a filter never hides a failure
+	// (e.g. a location-less `fatal error: ...`) behind a "no issues" summary.
+	Failed bool `toml:"failed"`
 }
 
 // ---------------------------------------------------------------------------

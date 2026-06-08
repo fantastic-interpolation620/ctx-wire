@@ -25,3 +25,9 @@ input = """
 FAIL
 """
 expected = "--- FAIL: TestThing (0.00s)\n    thing_test.go:10: got false\nFAIL"
+
+[[tests.go]]
+name = "failed exit is not collapsed to a 'go: ok' summary"
+failed = true
+input = "ok  \texample/pkg\t0.12s"
+expected = "ok  \texample/pkg\t0.12s"

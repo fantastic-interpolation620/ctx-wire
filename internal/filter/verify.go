@@ -102,7 +102,7 @@ func runTests(content, filterName string) (*VerifyResults, error) {
 			return nil, fmt.Errorf("[[tests.%s]] references unknown filter", name)
 		}
 		for _, t := range file.Tests[name] {
-			actual := strings.TrimRight(Apply(cf, t.Input), "\n")
+			actual := strings.TrimRight(applyTestCase(cf, t), "\n")
 			expected := strings.TrimRight(t.Expected, "\n")
 			res.Outcomes = append(res.Outcomes, TestOutcome{
 				FilterName: name,
@@ -125,6 +125,20 @@ func runTests(content, filterName string) (*VerifyResults, error) {
 	}
 
 	return res, nil
+}
+
+// applyTestCase runs one inline test through the filter. A `failed = true` case
+// is applied the way the runner applies output from a non-zero exit (suppress
+// synthetic-success messages, keep the tail on truncation), so a filter's
+// failure-path behavior can be regression-tested.
+func applyTestCase(cf *CompiledFilter, t tomlTest) string {
+	if t.Failed {
+		return ApplyWithMetaOptions(cf, t.Input, ApplyOptions{
+			SuppressSyntheticSuccess: true,
+			KeepTailOnTruncate:       true,
+		}).Output
+	}
+	return Apply(cf, t.Input)
 }
 
 // builtinFilterNames returns the sorted list of embedded filter names. Used for

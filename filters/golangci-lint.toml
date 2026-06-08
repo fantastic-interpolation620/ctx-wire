@@ -16,3 +16,9 @@ expected = "golangci-lint: ok"
 name = "issue preserved"
 input = "main.go:10:6: func unused is unused (unused)"
 expected = "main.go:10:6: func unused is unused (unused)"
+
+[[tests.golangci-lint]]
+name = "failed exit with empty stdout is not faked as 'golangci-lint: ok'"
+failed = true
+input = ""
+expected = ""
