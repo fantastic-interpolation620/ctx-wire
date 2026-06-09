@@ -154,6 +154,20 @@ func wrapServerEntry(sc map[string]any, exe string, compress bool) bool {
 		return false
 	}
 	if isWrapped(sc, exe) {
+		// Already wrapped. Upgrade a measurement-only wrap (`mcp-wrap --`) to
+		// compression when --compress is requested; otherwise no-op (idempotent).
+		// Never downgrade. Without this, `install --compress` on a server already
+		// wrapped for Phase-0 measurement would silently leave compression off.
+		args := toStringList(sc["args"])
+		alreadyCompress := len(args) >= 2 && args[1] == "--compress"
+		if compress && !alreadyCompress {
+			newArgs := []any{"mcp-wrap", "--compress"}
+			for _, a := range args[1:] { // keep "--", origCmd, origArgs...
+				newArgs = append(newArgs, a)
+			}
+			sc["args"] = newArgs
+			return true
+		}
 		return false
 	}
 	origArgs := toStringList(sc["args"])

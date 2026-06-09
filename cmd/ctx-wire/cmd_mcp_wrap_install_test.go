@@ -33,6 +33,22 @@ func TestMCPWrapCompressWrapUnwrap(t *testing.T) {
 		t.Errorf("unwrap of --compress shape did not restore original: cmd=%v args=%v", sc["command"], sc["args"])
 	}
 
+	// Upgrade: a measurement-only wrap gains --compress when re-wrapped with it
+	// (the dogfood bug, a machine already running Phase-0 measurement must not no-op).
+	meas := map[string]any{"command": exe, "args": []any{"mcp-wrap", "--", "npx", "chrome-devtools-mcp@latest"}}
+	if !wrapServerEntry(meas, exe, true) {
+		t.Fatal("expected --compress to upgrade an existing measurement wrap")
+	}
+	if got := meas["args"].([]any); !reflect.DeepEqual(got, []any{"mcp-wrap", "--compress", "--", "npx", "chrome-devtools-mcp@latest"}) {
+		t.Errorf("upgrade args = %v, want the measurement wrap with --compress inserted", got)
+	}
+	if wrapServerEntry(meas, exe, true) {
+		t.Error("re-wrapping an already-compressed entry must be a no-op")
+	}
+	if wrapServerEntry(meas, exe, false) {
+		t.Error("install without --compress must not downgrade a compress wrap")
+	}
+
 	// Back-compat: a server wrapped the old measurement-only way must still unwrap.
 	old := map[string]any{"command": exe, "args": []any{"mcp-wrap", "--", "node", "x.js"}}
 	if !isWrapped(old, exe) {
@@ -40,6 +56,51 @@ func TestMCPWrapCompressWrapUnwrap(t *testing.T) {
 	}
 	if !unwrapServerEntry(old, exe) || old["command"] != "node" {
 		t.Errorf("old shape did not unwrap to node: cmd=%v", old["command"])
+	}
+}
+
+// TestMCPWrapInstallCompressUpgradesExisting is the config-level dogfood guard:
+// `install --compress` on a server already wrapped for Phase-0 measurement must
+// upgrade it to compression (not no-op), and uninstall must still restore the
+// original from the upgraded shape.
+func TestMCPWrapInstallCompressUpgradesExisting(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "claude.json")
+	const orig = `{"mcpServers":{"cdt":{"command":"npx","args":["chrome-devtools-mcp@latest"]}}}`
+	if err := os.WriteFile(cfg, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cdtArgs := func() []any {
+		t.Helper()
+		var m map[string]any
+		data, _ := os.ReadFile(cfg)
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("config no longer parses: %v", err)
+		}
+		return m["mcpServers"].(map[string]any)["cdt"].(map[string]any)["args"].([]any)
+	}
+
+	// Phase-0 measurement wrap (no --compress).
+	if code := mcpWrapInstall(cfg, "cdt", false); code != 0 {
+		t.Fatalf("measurement install exit %d", code)
+	}
+	if a := cdtArgs(); len(a) < 2 || a[1] != "--" {
+		t.Fatalf("measurement wrap shape = %v", a)
+	}
+	// Re-install WITH --compress: must upgrade, not no-op.
+	if code := mcpWrapInstall(cfg, "cdt", true); code != 0 {
+		t.Fatalf("compress upgrade install exit %d", code)
+	}
+	a := cdtArgs()
+	want := []any{"mcp-wrap", "--compress", "--", "npx", "chrome-devtools-mcp@latest"}
+	if !reflect.DeepEqual(a, want) {
+		t.Fatalf("after --compress upgrade args = %v, want %v", a, want)
+	}
+	// Uninstall restores the original from the upgraded shape.
+	if code := mcpWrapUninstall(cfg, "cdt"); code != 0 {
+		t.Fatalf("uninstall exit %d", code)
+	}
+	if a := cdtArgs(); len(a) != 1 || a[0] != "chrome-devtools-mcp@latest" {
+		t.Errorf("uninstall args = %v, want [chrome-devtools-mcp@latest]", a)
 	}
 }
 
