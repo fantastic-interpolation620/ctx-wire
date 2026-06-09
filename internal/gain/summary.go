@@ -245,6 +245,7 @@ type Summary struct {
 	SavedBytes    int64
 	ByProgram     []CommandStat     // sorted by SavedBytes descending
 	ByAgent       []AgentStat       // sorted by SavedBytes desc, unattributed last
+	BySource      []SourceStat      // sorted by SavedBytes desc, untagged last
 	Opportunities []OpportunityStat // sorted by EmittedBytes descending
 }
 
@@ -282,8 +283,9 @@ func SummarizeWithOptions(opts Options) (*Summary, error) {
 	byProg := map[string]*CommandStat{}
 	byOpp := map[string]*OpportunityStat{}
 	byAgent := map[string]*AgentStat{}
+	bySource := map[string]*SourceStat{}
 	for _, path := range paths {
-		if err := summarizePath(path, opts, sum, byProg, byOpp, byAgent); err != nil {
+		if err := summarizePath(path, opts, sum, byProg, byOpp, byAgent, bySource); err != nil {
 			return nil, err
 		}
 	}
@@ -307,6 +309,19 @@ func SummarizeWithOptions(opts Options) (*Summary, error) {
 		}
 		return sum.ByAgent[i].Agent < sum.ByAgent[j].Agent
 	})
+	for _, st := range bySource {
+		sum.BySource = append(sum.BySource, *st)
+	}
+	sort.Slice(sum.BySource, func(i, j int) bool {
+		// Untagged (pre-source-tag) sinks last, then by savings, then by name.
+		if (sum.BySource[i].Source == "") != (sum.BySource[j].Source == "") {
+			return sum.BySource[j].Source == ""
+		}
+		if sum.BySource[i].SavedBytes != sum.BySource[j].SavedBytes {
+			return sum.BySource[i].SavedBytes > sum.BySource[j].SavedBytes
+		}
+		return sum.BySource[i].Source < sum.BySource[j].Source
+	})
 	for _, st := range byOpp {
 		sum.Opportunities = append(sum.Opportunities, *st)
 	}
@@ -316,7 +331,7 @@ func SummarizeWithOptions(opts Options) (*Summary, error) {
 	return sum, nil
 }
 
-func summarizePath(path string, opts Options, sum *Summary, byProg map[string]*CommandStat, byOpp map[string]*OpportunityStat, byAgent map[string]*AgentStat) error {
+func summarizePath(path string, opts Options, sum *Summary, byProg map[string]*CommandStat, byOpp map[string]*OpportunityStat, byAgent map[string]*AgentStat, bySource map[string]*SourceStat) error {
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -374,6 +389,16 @@ func summarizePath(path string, opts Options, sum *Summary, byProg map[string]*C
 		ast.RawBytes += int64(e.RawBytes)
 		ast.EmittedBytes += int64(e.EmittedBytes)
 		ast.SavedBytes += int64(e.SavedBytes)
+
+		sst := bySource[e.Source]
+		if sst == nil {
+			sst = &SourceStat{Source: e.Source}
+			bySource[e.Source] = sst
+		}
+		sst.Commands++
+		sst.RawBytes += int64(e.RawBytes)
+		sst.EmittedBytes += int64(e.EmittedBytes)
+		sst.SavedBytes += int64(e.SavedBytes)
 
 		decision := OpportunityPolicyForEntry(e, opts.MinOpportunityBytes)
 		if decision.Include {

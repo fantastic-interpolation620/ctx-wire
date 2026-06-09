@@ -91,6 +91,28 @@ func (a AgentStat) SavingsPct() float64 {
 	return float64(a.SavedBytes) / float64(a.RawBytes) * 100
 }
 
+// SourceStat aggregates savings by how ctx-wire was reached: "hook" (an agent's
+// rewrite hook/plugin), "shim" (a PATH shim), "run" (a manual ctx-wire run), or
+// "" for entries recorded before the source tag existed. It powers the by-source
+// breakdown, which answers "are hook-path and shim-path savings comparable?",
+// the benchmark for narrowing shim coverage.
+type SourceStat struct {
+	Source       string `json:"source"`
+	Commands     int    `json:"commands"`
+	RawBytes     int64  `json:"raw_bytes"`
+	EmittedBytes int64  `json:"emitted_bytes"`
+	SavedBytes   int64  `json:"saved_bytes"`
+}
+
+// SavingsPct is the percentage of raw bytes this source saved (0 when no raw
+// bytes).
+func (s SourceStat) SavingsPct() float64 {
+	if s.RawBytes == 0 {
+		return 0
+	}
+	return float64(s.SavedBytes) / float64(s.RawBytes) * 100
+}
+
 // AgentTotals buckets entries by attributed agent, sorted by SavedBytes
 // descending with the unattributed bucket ("") always last so a real split
 // (e.g. claude vs codex) reads first. It powers the per-agent breakdown for

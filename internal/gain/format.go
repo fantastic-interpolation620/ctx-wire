@@ -60,6 +60,32 @@ func FormatThemed(s *Summary, theme ui.Theme) string {
 			fmt.Fprintf(&b, "%s\n", gt.Dim.Render(fmt.Sprintf("... %d more programs", len(s.ByProgram)-limit)))
 		}
 	}
+	if len(s.BySource) > 0 {
+		fmt.Fprintf(&b, "\n%s\n", gt.Section.Render("By Source"))
+		var maxSaved int64
+		for _, st := range s.BySource {
+			if st.SavedBytes > maxSaved {
+				maxSaved = st.SavedBytes
+			}
+		}
+		rows := make([][]string, 0, len(s.BySource))
+		for _, st := range s.BySource {
+			label := st.Source
+			if label == "" {
+				label = "(untagged)"
+			}
+			rows = append(rows, []string{
+				label,
+				fmt.Sprintf("%d", st.Commands),
+				ui.HumanBytes(st.SavedBytes),
+				gt.percentBare(st.SavingsPct()),
+				gt.impact(st.SavedBytes, maxSaved, 18),
+			})
+		}
+		b.WriteString(gt.sourceTable(rows))
+		b.WriteByte('\n')
+		fmt.Fprintf(&b, "%s\n", gt.Dim.Render("hook = agent rewrite/plugin, shim = PATH shim, run = manual ctx-wire run"))
+	}
 	actionable := actionableOpportunities(s.Opportunities)
 	if len(actionable) > 0 {
 		fmt.Fprintf(&b, "\n%s\n", gt.Section.Render("Token Opportunities"))
@@ -203,6 +229,18 @@ func (t gainTheme) impact(saved, maxSaved int64, width int) string {
 }
 
 func (t gainTheme) table(rows [][]string) string {
+	return t.tableWith([]string{"#", "Program", "Count", "Saved", "Avg%", "Impact"},
+		map[int]bool{0: true, 2: true, 3: true, 4: true}, rows)
+}
+
+// sourceTable renders the by-source breakdown (Source/Count/Saved/Avg%/Impact),
+// right-aligning the numeric columns (count, saved, avg%).
+func (t gainTheme) sourceTable(rows [][]string) string {
+	return t.tableWith([]string{"Source", "Count", "Saved", "Avg%", "Impact"},
+		map[int]bool{1: true, 2: true, 3: true}, rows)
+}
+
+func (t gainTheme) tableWith(headers []string, rightAlign map[int]bool, rows [][]string) string {
 	headerStyle := t.Header
 	cellStyle := t.Cell
 	borderStyle := t.Border
@@ -211,19 +249,17 @@ func (t gainTheme) table(rows [][]string) string {
 		BorderLeft(false).
 		BorderRight(false).
 		BorderStyle(borderStyle).
-		Headers("#", "Program", "Count", "Saved", "Avg%", "Impact").
+		Headers(headers...).
 		Rows(rows...).
 		StyleFunc(func(row, col int) lipgloss.Style {
+			style := cellStyle
 			if row == table.HeaderRow {
-				if col == 0 || col == 2 || col == 3 || col == 4 {
-					return headerStyle.Align(lipgloss.Right).Padding(0, 1)
-				}
-				return headerStyle.Padding(0, 1)
+				style = headerStyle
 			}
-			if col == 0 || col == 2 || col == 3 || col == 4 {
-				return cellStyle.Align(lipgloss.Right).Padding(0, 1)
+			if rightAlign[col] {
+				return style.Align(lipgloss.Right).Padding(0, 1)
 			}
-			return cellStyle.Padding(0, 1)
+			return style.Padding(0, 1)
 		}).
 		String()
 }
