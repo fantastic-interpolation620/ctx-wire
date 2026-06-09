@@ -44,6 +44,14 @@ const (
 
 // DefaultCommands are safe, high-value commands to shim. Deliberately exclude
 // shells, language runtimes, and destructive/no-output utilities such as rm/cp.
+//
+// `cat` is deliberately NOT shimmed: host shell integrations (e.g. Cursor) and
+// agents routinely use it as a transport, `eval "$(cat script)"` or
+// `data=$(cat file)`, and the hook's attestation gate leaves command
+// substitutions un-rewritten, so such a `cat` reaches only the shim. Filtering
+// (capping/truncating) that output silently corrupts the captured value. The
+// `cat` filter still applies to an agent's explicit `cat file` via the hook;
+// see DeprecatedShims for pruning a `cat` shim left by an older install.
 var DefaultCommands = []string{
 	"agent-browser",
 	"awk",
@@ -52,7 +60,6 @@ var DefaultCommands = []string{
 	"bun",
 	"bunx",
 	"cargo",
-	"cat",
 	"cut",
 	"deno",
 	"docker",
@@ -87,6 +94,24 @@ var DefaultCommands = []string{
 	"wc",
 	"xargs",
 	"yarn",
+}
+
+// DeprecatedShims are commands ctx-wire used to shim but no longer should. The
+// self-heal path uninstalls them (across every managed shim dir on PATH) so an
+// install that predates their removal stops shimming them, without waiting for a
+// manual re-init. Removing a command from DefaultCommands alone never reaches an
+// existing user: Install only writes the current list, RefreshManaged keeps any
+// managed shim file already on disk current, and UninstallDefault targets only
+// the current defaults. Keep removed commands here so they are actually pruned
+// and so UninstallDefault can still clean them up.
+//
+// NEVER remove an entry from this list. ManagedShimDirsOnPATH discovers managed
+// dirs by DefaultCommands + DeprecatedShims, so dropping an entry makes a dir
+// that holds only that stale shim invisible again and the prune silently stops
+// reaching it. (A marker-scan discovery, any PATH dir holding any marker-verified
+// shim, would remove this constraint at the cost of stat-ing more files.)
+var DeprecatedShims = []string{
+	"cat",
 }
 
 // InstallReport describes a shim installation pass.
@@ -132,7 +157,10 @@ func InstallDefault(dir, ctxWire string) (InstallReport, error) {
 
 // UninstallDefault removes managed shims for the default command set.
 func UninstallDefault(dir string) (UninstallReport, error) {
-	return Uninstall(dir, DefaultCommands)
+	// Include DeprecatedShims so a normal uninstall also clears commands ctx-wire
+	// used to manage (a command that was ever shimmed should stay removable).
+	cmds := append(append([]string{}, DefaultCommands...), DeprecatedShims...)
+	return Uninstall(dir, cmds)
 }
 
 // Install writes shims into dir for commands that have a real executable
@@ -274,6 +302,44 @@ func ResolveReal(name string) (string, bool) {
 	return name, false
 }
 
+// ResolveRealStrict resolves name to the executable to run, but unlike
+// ResolveReal it returns an error when name resolves ONLY to a ctx-wire-managed
+// shim with no real binary behind it. ResolveReal hands the original name back in
+// that case; the runner would then exec it and re-enter the shim (a confusing
+// "no real X" failure from the shell, or a bounce between duplicate shim dirs).
+// The runner uses this to fail cleanly with exit 127 instead. A path or
+// hook-rewritten name that points at a real binary passes through unchanged.
+func ResolveRealStrict(name string) (string, error) {
+	real, _ := ResolveReal(name)
+	if resolvesOnlyToShim(real) {
+		return "", fmt.Errorf("no real %q found on PATH (only ctx-wire shims); PATH may be missing system dirs such as /usr/bin:/bin, or a duplicate ctx-wire install left stale shims", filepath.Base(real))
+	}
+	return real, nil
+}
+
+// resolvesOnlyToShim reports whether name (a bare command or a path) currently
+// resolves to a ctx-wire-managed shim. ResolveReal has already tried and failed
+// to find the real binary before this is consulted, so a managed-shim result
+// means executing name would re-enter the shim.
+func resolvesOnlyToShim(name string) bool {
+	if name == "" {
+		return false
+	}
+	path := name
+	if !strings.ContainsRune(name, filepath.Separator) {
+		p, err := lookPath(name)
+		if err != nil {
+			return false // not on PATH at all; let exec surface a normal error
+		}
+		path = p
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return isManaged(data)
+}
+
 // ResolveRealExe returns the first real (non-shim) executable for a bare command
 // name on PATH, skipping every ctx-wire-managed shim. Unlike ResolveReal (which
 // unwraps a single hook-rewritten name and falls back to the name itself), this
@@ -378,7 +444,17 @@ func shimScript(cmd, ctxWire string) string {
 %s
 cmd=%s
 ctx_wire=%s
-shim_dir=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
+# Compute the shim's own directory using only shell builtins (parameter
+# expansion plus the cd/pwd builtins), which need no PATH. Spawning an external
+# helper here would abort the shim on a hostile or stripped PATH (one missing
+# /usr/bin), the exact failure being fixed: every command then dies with 127.
+case $0 in
+  */*) shim_dir=${0%%/*} ;;
+  *) shim_dir=. ;;
+esac
+if abs_dir=$(CDPATH= cd -- "$shim_dir" 2>/dev/null && pwd); then
+  shim_dir=$abs_dir
+fi
 
 # is_ctx_wire_shim reports whether $1 is a ctx-wire-managed shim. It reads only
 # the first two lines so it never scans a real (binary) executable: the marker
@@ -647,6 +723,11 @@ func CtxWireBinariesOnPATH() []string {
 func ManagedShimDirsOnPATH() []string {
 	var dirs []string
 	seen := map[string]bool{}
+	// A dir counts as managed if it holds a managed shim for any command ctx-wire
+	// installs now (DefaultCommands) OR used to (DeprecatedShims). Including the
+	// deprecated set is what lets the self-heal still visit, and prune from, a dir
+	// that holds only a stale deprecated shim such as cat.
+	known := append(append([]string{}, DefaultCommands...), DeprecatedShims...)
 	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
 		if dir == "" {
 			dir = "."
@@ -655,7 +736,7 @@ func ManagedShimDirsOnPATH() []string {
 		if seen[clean] {
 			continue
 		}
-		for _, cmd := range DefaultCommands {
+		for _, cmd := range known {
 			p := filepath.Join(dir, shimFileName(cmd))
 			if info, err := os.Stat(p); err == nil && !info.IsDir() && isManagedShimFile(p) {
 				seen[clean] = true
@@ -683,6 +764,10 @@ func RefreshManaged(ctxWire string) int {
 	if err != nil {
 		return 0
 	}
+	deprecated := make(map[string]bool, len(DeprecatedShims))
+	for _, c := range DeprecatedShims {
+		deprecated[c] = true
+	}
 	refreshed := 0
 	for _, dir := range ManagedShimDirsOnPATH() {
 		entries, err := os.ReadDir(dir)
@@ -699,6 +784,13 @@ func RefreshManaged(ctxWire string) int {
 			}
 			cmd := shimCommandName(e.Name())
 			if cmd == "" {
+				continue
+			}
+			// Prune a shim for a command ctx-wire no longer manages instead of
+			// refreshing it, so an upgrade actually removes de-listed shims (e.g.
+			// cat) from every managed dir on PATH, not just new installs.
+			if deprecated[cmd] {
+				_ = os.Remove(path)
 				continue
 			}
 			want := shimScript(cmd, absCtxWire)

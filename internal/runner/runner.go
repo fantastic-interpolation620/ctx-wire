@@ -41,14 +41,20 @@ var maxCapture = 10 << 20 // 10 MiB
 // error indicates ctx-wire itself failed to launch the command (distinct from
 // the command exiting non-zero, which is reported via the returned code).
 func Run(ctx context.Context, reg *filter.Registry, name string, args []string) (int, error) {
+	// Resolve once, strictly: if name resolves only to a ctx-wire shim with no
+	// real binary, fail cleanly with 127 instead of re-executing the shim (which
+	// would bounce back into it). Covers both the bypass and filtered paths.
+	execName, err := shim.ResolveRealStrict(name)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ctx-wire: %v\n", err)
+		return 127, nil
+	}
 	if shouldBypass(name, args) {
-		execName, _ := shim.ResolveReal(name)
 		return runInherited(ctx, execName, args)
 	}
 	cmdline := commandLine(name, args)
 	scrubbedCmd := scrub.Command(name, args)
 	spool := tee.NewSpool(scrubbedCmd)
-	execName, _ := shim.ResolveReal(name)
 
 	matched := reg.Find(cmdline)
 
@@ -301,10 +307,13 @@ func Capture(ctx context.Context, reg *filter.Registry, name string, args []stri
 	if shouldBypass(name, args) {
 		return "", -1, fmt.Errorf("ctx-wire: %q is interactive or streaming and cannot be run via run_command; run it directly in a terminal", name)
 	}
+	execName, err := shim.ResolveRealStrict(name)
+	if err != nil {
+		return "", 127, fmt.Errorf("ctx-wire: %w", err)
+	}
 	cmdline := commandLine(name, args)
 	scrubbedCmd := scrub.Command(name, args)
 	spool := tee.NewSpool(scrubbedCmd)
-	execName, _ := shim.ResolveReal(name)
 	out, errOut, hint, code, err := runBuffered(ctx, reg, execName, args, cmdline, scrubbedCmd, spool)
 	if err != nil {
 		return "", code, err
