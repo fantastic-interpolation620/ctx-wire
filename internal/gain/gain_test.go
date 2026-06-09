@@ -99,7 +99,7 @@ func TestRecordScrubsCommand(t *testing.T) {
 
 func TestRecordWithMetaStoresFilterPath(t *testing.T) {
 	path := useTempLog(t)
-	if err := RecordWithMeta("git status", "git-status", "filtered", "", 1000, 100, 0); err != nil {
+	if err := RecordWithMeta("git status", "git-status", "filtered", "", "", 1000, 100, 0); err != nil {
 		t.Fatalf("RecordWithMeta: %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -117,7 +117,7 @@ func TestRecordWithMetaStoresFilterPath(t *testing.T) {
 
 func TestRecordWithMetaStoresAgent(t *testing.T) {
 	path := useTempLog(t)
-	if err := RecordWithMeta("git status", "git-status", "filtered", "claude", 1000, 100, 0); err != nil {
+	if err := RecordWithMeta("git status", "git-status", "filtered", "claude", "hook", 1000, 100, 0); err != nil {
 		t.Fatalf("RecordWithMeta: %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -130,6 +130,9 @@ func TestRecordWithMetaStoresAgent(t *testing.T) {
 	}
 	if e.Agent != "claude" {
 		t.Fatalf("agent = %q, want %q", e.Agent, "claude")
+	}
+	if e.Source != "hook" {
+		t.Fatalf("source = %q, want %q (hook/shim/run lets us compare savings by entry point)", e.Source, "hook")
 	}
 }
 
@@ -203,7 +206,7 @@ func TestSummarizeByAgent(t *testing.T) {
 
 func mustAgentRecord(t *testing.T, cmd, agentName string, raw, emitted int) {
 	t.Helper()
-	if err := RecordWithMeta(cmd, "", "filtered", agentName, raw, emitted, 0); err != nil {
+	if err := RecordWithMeta(cmd, "", "filtered", agentName, "", raw, emitted, 0); err != nil {
 		t.Fatalf("RecordWithMeta: %v", err)
 	}
 }
@@ -845,7 +848,7 @@ func mustRecord(t *testing.T, cmd string, raw, emitted, code int) {
 
 func mustRecordMeta(t *testing.T, cmd, filterName, mode string, raw, emitted, code int) {
 	t.Helper()
-	if err := RecordWithMeta(cmd, filterName, mode, "", raw, emitted, code); err != nil {
+	if err := RecordWithMeta(cmd, filterName, mode, "", "", raw, emitted, code); err != nil {
 		t.Fatalf("RecordWithMeta: %v", err)
 	}
 }

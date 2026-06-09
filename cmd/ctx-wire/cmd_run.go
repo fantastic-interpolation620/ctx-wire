@@ -100,11 +100,22 @@ func cmdRun(args []string) int {
 		}
 		prev, hadPrev := os.LookupEnv(agent.EnvName)
 		os.Setenv(agent.EnvName, ag)
+		// --agent is the wrapper form hooks/plugins use to invoke us (and is rarely
+		// typed by hand), so tag the source as hook-attributed. This is distinct
+		// from a bare `ctx-wire run` whose agent comes only from process-tree
+		// detection, which must not read as hook.
+		prevSrc, hadSrc := os.LookupEnv(runner.EnvSource)
+		os.Setenv(runner.EnvSource, "hook")
 		defer func() {
 			if hadPrev {
 				os.Setenv(agent.EnvName, prev)
 			} else {
 				os.Unsetenv(agent.EnvName)
+			}
+			if hadSrc {
+				os.Setenv(runner.EnvSource, prevSrc)
+			} else {
+				os.Unsetenv(runner.EnvSource)
 			}
 		}()
 	}

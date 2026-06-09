@@ -147,8 +147,14 @@ storage, unloadable filter registry).
   removes its own directory from `PATH`, resolves the real command, and then
   calls `ctx-wire run` with the real absolute path only when the process is
   agent-marked (`CTX_WIRE_AGENT_SHIMS=1` / `CTX_WIRE_SHIMS=1`) or launched from
-  an agent-looking parent process. That avoids recursive shim calls and keeps
-  your ordinary terminal path native. Shim captures are counted in a scrubbed
+  a **steering-only** agent (Cline, Windsurf, Kilo Code, Antigravity, VS Code,
+  Visual Studio). Under an agent that already rewrites commands itself, a hook
+  (Claude, Codex, Cursor, Gemini, Copilot) or a plugin (OpenCode, Pi, Hermes),
+  the shim passes through instead of wiring: that agent's own rewrite covers the
+  model-visible commands, so a second shim layer would only re-wrap shell
+  plumbing and corrupt command substitutions like `result=$(cat file)`. Set
+  `CTX_WIRE_SHIMS=1` to force the shim to wire even under those agents. That
+  avoids recursive shim calls and keeps your ordinary terminal path native. Shim captures are counted in a scrubbed
   local usage log so `ctx-wire doctor` can show whether they are actually being
   exercised. To exempt an agent-spawned helper whose stdout must stay byte-exact
   (a statusline command, a hook, an MCP subprocess), set

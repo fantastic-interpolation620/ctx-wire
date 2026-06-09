@@ -31,6 +31,15 @@ config and environment variables see [CONFIGURATION.md](CONFIGURATION.md).
   agent behavior, but the agent can still ignore the guidance. Use
   `ctx-wire explain <cmd>` and explicit `ctx-wire run ...` when you need
   certainty.
+- **A hook-capable agent (Claude, Cursor, Codex, Gemini, Copilot, OpenCode, Pi,
+  Hermes) stopped filtering after an upgrade.** The shim no longer auto-wires
+  under these agents, they are covered by their own hook or plugin, so if that
+  hook/plugin is not installed or not active you now get no coverage instead of
+  the old silent shim fallback. Run `ctx-wire doctor`: the hooks section shows
+  whether the agent's hook is configured; if it says "not configured", run
+  `ctx-wire init <agent>` (and for OpenCode/Pi/Hermes enable the plugin in the
+  agent's own config). To force broad shim coverage regardless, set
+  `CTX_WIRE_SHIMS=1`.
 - **VS Code / Visual Studio Copilot is not filtering.** MCP is opt-in: the agent
   must choose ctx-wire's `run_command` or `read_file` tool. There is no
   transparent interception for these (see Known limitations).

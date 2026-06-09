@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"ctx-wire/internal/filter"
@@ -218,6 +219,11 @@ func shimsSection() Section {
 		sec.Checks = append(sec.Checks, Check{"PATH", Warn,
 			"shims installed but not first on PATH; put " + display(st.Dir) + " before system tool dirs"})
 	}
+	if missing := missingSystemPathDirs(); len(missing) > 0 {
+		sec.Checks = append(sec.Checks, Check{"system PATH", Warn,
+			fmt.Sprintf("PATH is missing %s; a shim then cannot find the real command (you get \"no real X on PATH\"), and tools like git cannot find ssh. This is an environment issue, not ctx-wire; fix your shell PATH",
+				strings.Join(missing, " and "))})
+	}
 	if st.Uses > 0 {
 		sec.Checks = append(sec.Checks, Check{"usage", OK,
 			fmt.Sprintf("%d shim capture(s) recorded; last %s", st.Uses, st.LastUse)})
@@ -225,6 +231,29 @@ func shimsSection() Section {
 		sec.Checks = append(sec.Checks, Check{"usage", Warn, "no shim captures recorded yet"})
 	}
 	return sec
+}
+
+// missingSystemPathDirs returns the standard system tool dirs absent from PATH.
+// A PATH without /usr/bin or /bin is the environment fault behind "no real git
+// on PATH": shims cannot resolve the real command, and tools like git cannot
+// find their own ssh. Skipped on Windows, where these dirs do not apply.
+func missingSystemPathDirs() []string {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	have := map[string]bool{}
+	for _, d := range filepath.SplitList(os.Getenv("PATH")) {
+		if d != "" {
+			have[filepath.Clean(d)] = true
+		}
+	}
+	var missing []string
+	for _, d := range []string{"/usr/bin", "/bin"} {
+		if !have[d] {
+			missing = append(missing, d)
+		}
+	}
+	return missing
 }
 
 func hooksSection(opts Options) Section {
@@ -257,18 +286,51 @@ func hooksSection(opts Options) Section {
 	sec.Checks = append(sec.Checks, ruleCheck("cline", install.ClineRulesPath(opts.Workdir), "ctx-wire run"))
 	sec.Checks = append(sec.Checks, ruleCheck("windsurf", install.WindsurfRulesPath(opts.Workdir), "ctx-wire run"))
 	sec.Checks = append(sec.Checks, hookCheck("copilot", install.CopilotHookPath(opts.Workdir), "ctx-wire hook copilot"))
+	// Plugin-based hook-capable agents (OpenCode, Pi, Hermes). These are the most
+	// exposed by the shim-narrowing: `ctx-wire init` writes the plugin file, but
+	// enabling it is a separate step in the agent's own config, so a present file
+	// does not prove the host loaded it. Surface install state with that caveat.
+	if p, err := install.OpenCodePluginPath(); err == nil {
+		sec.Checks = append(sec.Checks, pluginCheck("opencode", p, "ctx-wire"))
+	}
+	if p, err := install.PiPluginPath(); err == nil {
+		sec.Checks = append(sec.Checks, pluginCheck("pi", p, "ctx-wire"))
+	}
+	if dir, err := install.HermesPluginDir(); err == nil {
+		sec.Checks = append(sec.Checks, pluginCheck("hermes", filepath.Join(dir, "__init__.py"), "ctx-wire"))
+	}
 	return sec
 }
 
-func hookCheck(agent, path, needle string) Check {
+// pluginCheck reports a plugin-based agent's install state. Unlike a hook, a
+// present plugin file does not prove the host enabled/loaded it, so a found
+// plugin is reported with that caveat rather than a flat OK.
+func pluginCheck(agent, path, needle string) Check {
+	notInstalled := "plugin not installed (run `ctx-wire init " + agent + "`); without it this agent has no coverage, hook-capable agents are no longer auto-shimmed (set CTX_WIRE_SHIMS=1 to force)"
 	contains, err := fileContains(path, needle)
 	switch {
 	case err != nil:
-		return Check{agent, Off, "not configured (run `ctx-wire init " + agent + "` to enable)"}
+		return Check{agent, Off, notInstalled}
+	case contains:
+		return Check{agent, OK, "plugin file present in " + display(path) + " (enable it in the agent's config; host load not verified here)"}
+	default:
+		return Check{agent, Off, notInstalled}
+	}
+}
+
+func hookCheck(agent, path, needle string) Check {
+	// hookCheck is for hook-capable agents (claude/cursor/codex/gemini/copilot),
+	// which the shim no longer auto-wires under, so a missing hook here means this
+	// agent has NO coverage, not the silent shim fallback it used to get.
+	notConfigured := "not configured (run `ctx-wire init " + agent + "`); without it this agent gets no coverage, hook-capable agents are no longer auto-shimmed (set CTX_WIRE_SHIMS=1 to force)"
+	contains, err := fileContains(path, needle)
+	switch {
+	case err != nil:
+		return Check{agent, Off, notConfigured}
 	case contains:
 		return Check{agent, OK, "hook present in " + display(path)}
 	default:
-		return Check{agent, Off, "not configured (run `ctx-wire init " + agent + "` to enable)"}
+		return Check{agent, Off, notConfigured}
 	}
 }
 

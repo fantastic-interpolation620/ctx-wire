@@ -36,6 +36,11 @@ import (
 // to disk. It is a var so tests can shrink it. The on-disk spool is unaffected.
 var maxCapture = 10 << 20 // 10 MiB
 
+// EnvSource is set to "hook" by `ctx-wire run --agent ...` (how a rewrite hook or
+// plugin invokes us), so gain can record the true entry point. Process-tree
+// agent detection is not a reliable hook signal on its own.
+const EnvSource = "CTX_WIRE_SOURCE"
+
 // Run executes name+args, applies the matching filter from reg, scrubs all
 // output to the process stdio, and returns the child's exit code. A non-nil
 // error indicates ctx-wire itself failed to launch the command (distinct from
@@ -213,8 +218,25 @@ func recordGain(cmdline, filterName, mode string, rawBytes, emittedBytes, exitCo
 		return
 	}
 	ag := agent.Current()
-	if err := gain.RecordWithMeta(cmdline, filterName, mode, ag, rawBytes, emittedBytes, exitCode); err == nil {
+	if err := gain.RecordWithMeta(cmdline, filterName, mode, ag, gainSource(), rawBytes, emittedBytes, exitCode); err == nil {
 		_, _ = telemetry.RecordCommand(cmdline, ag, rawBytes, emittedBytes)
+	}
+}
+
+// gainSource records how ctx-wire was reached, so hook-vs-shim savings can be
+// compared (the benchmark for narrowing shim coverage). The shim sets
+// CTX_WIRE_SHIM; the `run --agent` wrapper form (used by hooks/plugins, rarely
+// by hand) sets EnvSource=hook. An attributed agent alone is NOT a hook signal:
+// a bare `ctx-wire run` typed inside an agent session also resolves an agent via
+// process-tree detection, so anything without those markers is a plain run.
+func gainSource() string {
+	switch {
+	case os.Getenv(shim.EnvName) != "":
+		return "shim"
+	case os.Getenv(EnvSource) == "hook":
+		return "hook"
+	default:
+		return "run"
 	}
 }
 

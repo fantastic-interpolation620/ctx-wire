@@ -60,7 +60,8 @@ type Entry struct {
 	Command      string `json:"command"` // scrubbed
 	Filter       string `json:"filter,omitempty"`
 	Mode         string `json:"mode,omitempty"`
-	Agent        string `json:"agent,omitempty"` // invoking agent, "" when unattributed
+	Agent        string `json:"agent,omitempty"`  // invoking agent, "" when unattributed
+	Source       string `json:"source,omitempty"` // "hook" | "shim" | "run": how ctx-wire was reached
 	RawBytes     int    `json:"raw_bytes"`
 	EmittedBytes int    `json:"emitted_bytes"`
 	SavedBytes   int    `json:"saved_bytes"`
@@ -217,14 +218,15 @@ func readEntries(path string) ([]Entry, error) {
 // Record appends a gain entry. The command is scrubbed before storage, so
 // secrets in argv never reach the log. Disabled by CTX_WIRE_GAIN=0.
 func Record(command string, rawBytes, emittedBytes, exitCode int) error {
-	return RecordWithMeta(command, "", "", "", rawBytes, emittedBytes, exitCode)
+	return RecordWithMeta(command, "", "", "", "", rawBytes, emittedBytes, exitCode)
 }
 
 // RecordWithMeta appends a gain entry with filter-path metadata. filterName is
 // the matched filter, when any. mode is usually "filtered" or "passthrough".
 // agentName attributes the command to the invoking agent (already normalized;
-// "" when unattributed).
-func RecordWithMeta(command, filterName, mode, agentName string, rawBytes, emittedBytes, exitCode int) error {
+// "" when unattributed). source is how ctx-wire was reached ("hook" | "shim" |
+// "run"), so hook-vs-shim savings can be compared.
+func RecordWithMeta(command, filterName, mode, agentName, source string, rawBytes, emittedBytes, exitCode int) error {
 	if !Enabled() {
 		return nil
 	}
@@ -244,6 +246,7 @@ func RecordWithMeta(command, filterName, mode, agentName string, rawBytes, emitt
 		Filter:       scrub.Scrub(filterName),
 		Mode:         scrub.Scrub(mode),
 		Agent:        agentName,
+		Source:       source,
 		RawBytes:     rawBytes,
 		EmittedBytes: emittedBytes,
 		SavedBytes:   saved,
