@@ -186,6 +186,12 @@ type ApplyOptions struct {
 	// message for it.
 	SuppressSyntheticSuccess bool
 
+	// TruncateLevel scales the filter's numeric caps for this invocation. The
+	// zero value (LevelDefault) applies the TOML values as written, which keeps
+	// verify and the conformance corpus deterministic; runners resolve the
+	// user's level via ResolveTruncateLevel.
+	TruncateLevel TruncateLevel
+
 	// KeepTailOnTruncate makes the absolute max_lines cap keep the LAST lines
 	// instead of the first. Runners set it for non-zero exit codes: when a
 	// failed command's output overflows the cap, the actionable signal (the
@@ -393,20 +399,22 @@ func ApplyWithMetaOptions(f *CompiledFilter, stdout string, opts ApplyOptions) A
 	}
 
 	// 5. truncate_lines_at
-	if f.truncateLinesAt != nil {
+	if at := scaledCap(f.truncateLinesAt, opts.TruncateLevel); at != nil {
 		for i, l := range lines {
-			if len([]rune(l)) > *f.truncateLinesAt {
+			if len([]rune(l)) > *at {
 				truncated = true
 			}
-			lines[i] = truncate(l, *f.truncateLinesAt)
+			lines[i] = truncate(l, *at)
 		}
 	}
 
 	// 6. head + tail
+	headCap := scaledCap(f.headLines, opts.TruncateLevel)
+	tailCap := scaledCap(f.tailLines, opts.TruncateLevel)
 	total := len(lines)
 	switch {
-	case f.headLines != nil && f.tailLines != nil:
-		head, tail := *f.headLines, *f.tailLines
+	case headCap != nil && tailCap != nil:
+		head, tail := *headCap, *tailCap
 		if total > head+tail {
 			truncated = true
 			result := make([]string, 0, head+tail+1)
@@ -415,14 +423,14 @@ func ApplyWithMetaOptions(f *CompiledFilter, stdout string, opts ApplyOptions) A
 			result = append(result, lines[total-tail:]...)
 			lines = result
 		}
-	case f.headLines != nil:
-		head := *f.headLines
+	case headCap != nil:
+		head := *headCap
 		if total > head {
 			truncated = true
 			lines = append(lines[:head:head], fmt.Sprintf("... (%d lines omitted)", total-head))
 		}
-	case f.tailLines != nil:
-		tail := *f.tailLines
+	case tailCap != nil:
+		tail := *tailCap
 		if total > tail {
 			truncated = true
 			omitted := total - tail
@@ -436,7 +444,9 @@ func ApplyWithMetaOptions(f *CompiledFilter, stdout string, opts ApplyOptions) A
 	// 6b. group_by (group key:rest output; cap per group and total groups). Runs
 	// after line cleanup/truncation and before the final absolute max_lines cap.
 	if f.groupBy != nil {
-		grouped, gtrunc := applyGroupBy(f.groupBy, lines)
+		grouped, gtrunc := applyGroupBy(f.groupBy, lines,
+			scaledCount(f.groupBy.maxPerGroup, opts.TruncateLevel),
+			scaledCount(f.groupBy.maxGroups, opts.TruncateLevel))
 		if gtrunc {
 			truncated = true
 		}
@@ -444,8 +454,8 @@ func ApplyWithMetaOptions(f *CompiledFilter, stdout string, opts ApplyOptions) A
 	}
 
 	// 7. max_lines (absolute cap, counts omit messages)
-	if f.maxLines != nil {
-		max := *f.maxLines
+	if m := scaledCap(f.maxLines, opts.TruncateLevel); m != nil {
+		max := *m
 		if len(lines) > max {
 			truncated = true
 			omitted := len(lines) - max
@@ -510,7 +520,7 @@ func stripANSI(s string) string {
 // in original order. Lines that do not match g.key pass through untouched. It
 // returns the new lines and whether anything was omitted. Output is identical to
 // input when nothing exceeds the caps.
-func applyGroupBy(g *compiledGroupBy, lines []string) ([]string, bool) {
+func applyGroupBy(g *compiledGroupBy, lines []string, perGroup, maxGroups int) ([]string, bool) {
 	// Pass 1: establish group order and per-group totals.
 	total := map[string]int{}
 	var order []string
@@ -531,7 +541,7 @@ func applyGroupBy(g *compiledGroupBy, lines []string) ([]string, bool) {
 
 	inCap := make(map[string]bool, len(order))
 	for i, k := range order {
-		inCap[k] = i < g.maxGroups
+		inCap[k] = i < maxGroups
 	}
 
 	// Pass 2: rebuild, preserving original order within and across groups.
@@ -554,10 +564,10 @@ func applyGroupBy(g *compiledGroupBy, lines []string) ([]string, bool) {
 		n := seen[k]
 		seen[k]++
 		switch {
-		case n < g.maxPerGroup:
+		case n < perGroup:
 			out = append(out, l)
-		case n == g.maxPerGroup:
-			out = append(out, fmt.Sprintf(g.omitLabel, total[k]-g.maxPerGroup, k))
+		case n == perGroup:
+			out = append(out, fmt.Sprintf(g.omitLabel, total[k]-perGroup, k))
 			truncated = true
 		default:
 			// already past the per-group cap and emitted the omit line; skip

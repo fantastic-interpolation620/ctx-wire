@@ -101,6 +101,15 @@ type Output struct {
 	// trailing whitespace, collapses blank-line runs) for a few more tokens.
 	UltraCompact bool `toml:"ultra_compact"`
 
+	// Truncate scales every filter's numeric caps (truncate_lines_at,
+	// head/tail, max_lines, group caps) without editing TOML:
+	// "light" doubles the caps, "aggressive" halves them (floor 1), "none"
+	// removes them, "default"/empty applies them as written. Filters still only
+	// act on output they positively recognize; the dial never widens what gets
+	// filtered, only how much of it is kept. CTX_WIRE_TRUNCATE overrides per
+	// invocation.
+	Truncate string `toml:"truncate"`
+
 	// MonthlyTokenBudget frames `gain --quota`: the tokens you aim to save (or
 	// are allotted) per month. 0 leaves quota in its budget-free framing, where
 	// savings are shown as context-window multiples. Deliberately vendor-neutral
