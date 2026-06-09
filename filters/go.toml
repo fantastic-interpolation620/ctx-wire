@@ -5,7 +5,18 @@ strip_ansi = true
 match_output = [
   { pattern = "(?m)^(ok\\s|\\?\\s|PASS$)", message = "go: ok", unless = "(?m)(^FAIL|panic:|undefined:|vet:|error:)" },
 ]
-strip_lines_matching = ["^\\s*$"]
+strip_lines_matching = [
+  "^\\s*$",
+  # `go test -v` prints these per-test even when one package fails, so they swamp
+  # the few failure lines an agent needs. Anchored to the exact markers, so a test
+  # named "RUN"/"PASS" or a log line is never stripped. Failures use `--- FAIL:`
+  # (kept), as do panics, `t.Log` lines, and the trailing FAIL summary.
+  "^=== RUN\\s+",
+  "^=== PAUSE\\s+",
+  "^=== CONT\\s+",
+  "^\\s*--- PASS:\\s+",
+  "^\\s*--- SKIP:\\s+",
+]
 max_lines = 140
 on_empty = "go: ok"
 
@@ -31,3 +42,20 @@ name = "failed exit is not collapsed to a 'go: ok' summary"
 failed = true
 input = "ok  \texample/pkg\t0.12s"
 expected = "ok  \texample/pkg\t0.12s"
+
+[[tests.go]]
+name = "verbose partial failure: passing noise stripped, failure block kept"
+failed = true
+input = """
+=== RUN   TestPassA
+--- PASS: TestPassA (0.00s)
+=== RUN   TestPassB
+--- PASS: TestPassB (0.00s)
+=== RUN   TestFailC
+    x_test.go:5: boom: got false
+--- FAIL: TestFailC (0.00s)
+FAIL
+FAIL\tx\t0.379s
+FAIL
+"""
+expected = "    x_test.go:5: boom: got false\n--- FAIL: TestFailC (0.00s)\nFAIL\nFAIL\tx\t0.379s\nFAIL"
