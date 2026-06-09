@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,12 +11,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"ctx-wire/internal/mcpcompress"
 	"ctx-wire/internal/paths"
+	"ctx-wire/internal/scrub"
 )
+
+// mcpRawSpoolCap bounds the per-session raw-recovery spool. MCP snapshots carry
+// page text and URLs, so the recovery copy is capped; once it is reached, results
+// are forwarded uncompressed rather than grow the spool without bound.
+const mcpRawSpoolCap = 64 << 20 // 64 MiB
 
 // cmdMCPWrap is the MCP Phase 0 measurement spike. It sits transparently between
 // an agent and a stdio MCP server, relays every JSON-RPC message byte-for-byte,
@@ -28,17 +37,19 @@ func cmdMCPWrap(args []string) int {
 	if isHelpArg(args) {
 		printHelp(os.Stdout, helpDoc{
 			usage: []string{
-				"ctx-wire mcp-wrap -- <server> [args]",
+				"ctx-wire mcp-wrap [--compress] -- <server> [args]",
 				"ctx-wire mcp-wrap install <server> [--config PATH]",
 				"ctx-wire mcp-wrap uninstall <server> [--config PATH]",
 			},
-			summary: "Transparently relay a stdio MCP server and measure per-tool token cost (no compression).",
+			summary: "Transparently relay a stdio MCP server, measure per-tool token cost, and optionally compress verbose results.",
 			notes: []string{
-				"It forwards every JSON-RPC message unchanged and records the result size of each tools/call, so you can see where MCP tokens go before building compression. A per-tool summary is written under the data dir and printed to stderr when the session ends.",
+				"It forwards every JSON-RPC message unchanged and records the result size of each tools/call, so you can see where MCP tokens go. A per-tool summary is written under the data dir and printed to stderr when the session ends.",
+				"`--compress` reduces verbose accessibility snapshots (today: chrome-devtools take_snapshot) before they reach the agent. The reduction is subtractive (drops page-chrome subtrees and redundant text; never renumbers a ref), the raw result is spooled locally for recovery, and any reduction error falls back to the untouched result.",
 				"`install <server>` rewrites that server's entry in your MCP config (default ~/.claude.json) to launch through mcp-wrap; `uninstall` reverts it. Both back up the config and need an agent restart to take effect.",
 			},
 			examples: []string{
 				"ctx-wire mcp-wrap -- npx @playwright/mcp@latest",
+				"ctx-wire mcp-wrap --compress -- npx chrome-devtools-mcp@latest",
 				"ctx-wire mcp-wrap install chrome-devtools",
 			},
 		})
@@ -108,7 +119,25 @@ func cmdMCPWrap(args []string) int {
 		return 1
 	}
 
-	m := &mcpMeasure{tools: map[string]*toolStat{}, pending: map[string]string{}}
+	compress := false
+	pre := args
+	if sep >= 0 {
+		pre = args[:sep]
+	}
+	for _, a := range pre {
+		if a == "--compress" {
+			compress = true
+		}
+	}
+
+	m := &mcpMeasure{tools: map[string]*toolStat{}, pending: map[string]string{}, compress: compress, spoolCap: mcpRawSpoolCap}
+	if compress {
+		m.openSpool()
+		if m.spool == nil {
+			fmt.Fprintln(os.Stderr, "ctx-wire mcp-wrap: --compress could not open a private raw-recovery spool; results will be forwarded uncompressed.")
+		}
+		defer m.closeSpool()
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -118,10 +147,11 @@ func cmdMCPWrap(args []string) int {
 		defer childIn.Close()
 		relayMCP(os.Stdin, childIn, m.onAgentMsg)
 	}()
-	// server -> agent: forward verbatim, measure tools/call result content.
+	// server -> agent: measure result content; with --compress, reduce snapshot
+	// results before forwarding (default forwards verbatim).
 	go func() {
 		defer wg.Done()
-		relayMCP(childOut, os.Stdout, m.onServerMsg)
+		relayMCPTransform(childOut, os.Stdout, m.serverMsg)
 		// The child's stdout closed (it exited). Unblock the agent->server reader
 		// that may be parked on os.Stdin, so the session does not hang if the child
 		// crashes while the agent is idle (otherwise wg.Wait blocks forever).
@@ -172,6 +202,25 @@ func relayMCP(src io.Reader, dst io.Writer, hook func([]byte)) {
 	}
 }
 
+// relayMCPTransform is like relayMCP but the transform returns the bytes to
+// forward, so the server->agent direction can compress a result. transform must
+// return valid JSON-RPC (or the original line). MCP stdio framing is one JSON
+// message per line.
+func relayMCPTransform(src io.Reader, dst io.Writer, transform func([]byte) []byte) {
+	r := bufio.NewReader(src)
+	for {
+		line, err := r.ReadBytes('\n')
+		if len(line) > 0 {
+			if _, werr := dst.Write(transform(line)); werr != nil {
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
 type toolStat struct {
 	calls      int
 	resultByte int
@@ -181,6 +230,15 @@ type mcpMeasure struct {
 	mu      sync.Mutex
 	tools   map[string]*toolStat
 	pending map[string]string // request id (raw json) -> tool name
+
+	compress   bool     // --compress: reduce snapshot result text before forwarding
+	compRaw    int      // bytes of snapshot text seen (compressed path)
+	compOut    int      // bytes emitted after reduction
+	compCalls  int      // results actually reduced
+	spool      *os.File // scrubbed raw results spooled here for recovery (local, private)
+	spoolPath  string   // path shown in the compressed-result note
+	spoolBytes int      // bytes written to the spool so far (cap guard)
+	spoolCap   int      // max bytes to spool this session
 }
 
 type rpcMsg struct {
@@ -235,6 +293,129 @@ func (m *mcpMeasure) onServerMsg(line []byte) {
 	st.resultByte += n
 }
 
+// serverMsg measures the raw result and, when --compress is on, reduces a
+// snapshot result before forwarding. It always measures the RAW size; the
+// reduction is best-effort with a hard fallback to the untouched raw line.
+func (m *mcpMeasure) serverMsg(line []byte) []byte {
+	m.onServerMsg(line)
+	if !m.compress {
+		return line
+	}
+	red, rawN, outN, ok := m.reduceLine(line)
+	if !ok {
+		return line
+	}
+	// Only hand the agent the compressed form once the untouched (secret-scrubbed)
+	// raw is recorded for recovery. If the spool is unavailable or full, forward the
+	// raw result: never give the agent a compressed snapshot it cannot recover.
+	if !m.spoolRaw([]byte(scrub.Scrub(string(line)))) {
+		return line
+	}
+	m.mu.Lock()
+	m.compRaw += rawN
+	m.compOut += outN
+	m.compCalls++
+	m.mu.Unlock()
+	return red
+}
+
+// reduceLine reduces snapshot text inside a JSON-RPC result, returning valid
+// JSON-RPC. Fully fail-safe: any parse/marshal error or panic yields (nil,false)
+// so the caller forwards the untouched raw line. The reducer self-gates
+// (non-snapshot text reduces to itself), so only real a11y snapshots change.
+func (m *mcpMeasure) reduceLine(line []byte) (out []byte, rawN, outN int, ok bool) {
+	defer func() {
+		if recover() != nil {
+			out, rawN, outN, ok = nil, 0, 0, false
+		}
+	}()
+	dec := json.NewDecoder(bytes.NewReader(line))
+	dec.UseNumber()
+	var msg map[string]any
+	if dec.Decode(&msg) != nil {
+		return nil, 0, 0, false
+	}
+	result, _ := msg["result"].(map[string]any)
+	if result == nil {
+		return nil, 0, 0, false
+	}
+	content, _ := result["content"].([]any)
+	if len(content) == 0 {
+		return nil, 0, 0, false
+	}
+	changed := false
+	for _, c := range content {
+		item, _ := c.(map[string]any)
+		if item == nil || item["type"] != "text" {
+			continue
+		}
+		txt, _ := item["text"].(string)
+		if txt == "" {
+			continue
+		}
+		rawN += len(txt)
+		red, dropped := mcpcompress.ReduceSnapshotText(txt)
+		if dropped > 0 {
+			red += "\n[ctx-wire: snapshot compressed; " + strconv.Itoa(dropped) + " elements omitted, raw (scrubbed) spooled to " + m.spoolPath + "]"
+			item["text"] = red
+			changed = true
+		}
+		if s, sok := item["text"].(string); sok {
+			outN += len(s)
+		}
+	}
+	if !changed {
+		return nil, 0, 0, false
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return nil, 0, 0, false
+	}
+	return append(b, '\n'), rawN, outN, true
+}
+
+// spoolRaw appends the secret-scrubbed raw result so a compressed snapshot stays
+// recoverable, and enforces the per-session cap. It returns false when the spool
+// is unavailable or the cap would be exceeded, which is the caller's signal to
+// forward the result uncompressed (never compress without a recovery path).
+// Local-only.
+func (m *mcpMeasure) spoolRaw(line []byte) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.spool == nil || m.spoolBytes+len(line) > m.spoolCap {
+		return false
+	}
+	n, err := m.spool.Write(line)
+	m.spoolBytes += n
+	return err == nil
+}
+
+// openSpool creates the per-session raw-result spool (local, 0600) used for
+// recovery when --compress is on. Best-effort: a failure just means no spool.
+func (m *mcpMeasure) openSpool() {
+	base, err := paths.DataHome()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(base, paths.AppName)
+	if os.MkdirAll(dir, 0o700) != nil {
+		return
+	}
+	path := filepath.Join(dir, "mcp-spool-"+time.Now().UTC().Format("20060102-150405")+".jsonl")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	m.spool = f
+	m.spoolPath = path
+}
+
+func (m *mcpMeasure) closeSpool() {
+	if m.spool != nil {
+		_ = m.spool.Close()
+	}
+}
+
 // report writes a per-tool summary to the data dir and prints it to stderr, so
 // the measurement survives the session.
 func (m *mcpMeasure) report() {
@@ -251,8 +432,12 @@ func (m *mcpMeasure) report() {
 		return m.tools[names[i]].resultByte > m.tools[names[j]].resultByte
 	})
 
+	mode := "measurement (no compression)"
+	if m.compress {
+		mode = "measurement + compression"
+	}
 	var b []byte
-	b = append(b, fmt.Sprintf("ctx-wire mcp-wrap measurement (no compression)\n%-28s %8s %12s %12s\n", "tool", "calls", "bytes", "~tokens")...)
+	b = append(b, fmt.Sprintf("ctx-wire mcp-wrap %s\n%-28s %8s %12s %12s\n", mode, "tool", "calls", "bytes", "~tokens")...)
 	var totalBytes int
 	for _, n := range names {
 		st := m.tools[n]
@@ -260,6 +445,19 @@ func (m *mcpMeasure) report() {
 		b = append(b, fmt.Sprintf("%-28s %8d %12d %12d\n", n, st.calls, st.resultByte, st.resultByte/4)...)
 	}
 	b = append(b, fmt.Sprintf("%-28s %8s %12d %12d\n", "TOTAL", "", totalBytes, totalBytes/4)...)
+
+	if m.compress {
+		saved := m.compRaw - m.compOut
+		pct := 0.0
+		if m.compRaw > 0 {
+			pct = 100 * float64(saved) / float64(m.compRaw)
+		}
+		b = append(b, fmt.Sprintf("\ncompression: %d snapshot result(s), %d -> %d bytes (%.1f%% saved, ~%d tokens)\n",
+			m.compCalls, m.compRaw, m.compOut, pct, saved/4)...)
+		if m.spoolPath != "" {
+			b = append(b, fmt.Sprintf("scrubbed raw results recoverable: %s\n", m.spoolPath)...)
+		}
+	}
 
 	fmt.Fprint(os.Stderr, "\n"+string(b))
 	if base, err := paths.DataHome(); err == nil {
