@@ -13,7 +13,7 @@ const ROWS: Row[] = [
   {
     dim: "Catching the command",
     rtk: "Agent hooks rewrite the command before it runs.",
-    ctx: "Hooks too, plus PATH shims that catch commands nested scripts spawn, and an MCP tool for editors that speak it.",
+    ctx: "Hooks too, plus PATH shims for agents that don't expose one, and an MCP tool for editors that speak it.",
     note: "wider net",
   },
   {
@@ -39,6 +39,12 @@ const ROWS: Row[] = [
     rtk: "Shows whether a command would be rewritten.",
     ctx: "explain breaks down the filter, the mode, and why; doctor checks the whole setup end to end.",
     note: "deeper",
+  },
+  {
+    dim: "MCP tool output",
+    rtk: "Focused on shell command output.",
+    ctx: "mcp-wrap relays any MCP server, measures per-tool token cost, and compresses verbose browser snapshots. Raw stays on disk.",
+    note: "mcp wire",
   },
 ];
 

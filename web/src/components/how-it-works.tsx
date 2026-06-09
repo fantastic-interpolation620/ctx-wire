@@ -26,7 +26,7 @@ const CAPS = [
   },
   {
     name: "PATH shims",
-    desc: "Catches commands nested scripts spawn, not just the Bash hook.",
+    desc: "Coverage for agents without a hook (Cline, Windsurf, VS Code...). Where a hook already rewrites, shims step aside instead of double-wrapping.",
   },
   {
     name: "Fail-closed scrubbing",
@@ -41,7 +41,7 @@ const CAPS = [
     desc: "Savings split by agent (Claude, Codex, Cursor, Gemini, Copilot).",
   },
   {
-    name: "142 filters · 320+ tests",
+    name: "142 filters · 330+ tests",
     desc: "Declarative TOML corpus, conformance-tested every release.",
   },
   {
@@ -53,8 +53,8 @@ const CAPS = [
     desc: "tune draft scaffolds a filter from real output; pull community filters or publish your own.",
   },
   {
-    name: "Wrap an MCP server",
-    desc: "mcp-wrap relays any MCP server and measures what each tool costs you in tokens.",
+    name: "Compress the MCP wire",
+    desc: "mcp-wrap relays any MCP server, measures what each tool costs, and compresses verbose browser snapshots (chrome-devtools, Playwright). Raw stays on disk.",
   },
 ];
 

@@ -95,7 +95,7 @@ export function Footer() {
               type="button"
               onClick={() => copy(INSTALL)}
               title="Click to copy"
-              className="no-scrollbar group inline-flex max-w-full items-center gap-3 overflow-x-auto rounded-card bg-screen px-4 py-2.5 font-mono text-2xs text-fg ring-1 ring-inset ring-line-soft transition-colors hover:ring-green/40"
+              className="no-scrollbar group inline-flex max-w-full items-center gap-3 overflow-x-auto rounded-card bg-screen px-4 py-2.5 font-mono text-2xs text-fg ring-1 ring-inset ring-line-soft transition-[box-shadow,transform] duration-150 ease-out hover:ring-green/40 motion-safe:active:scale-[0.98]"
             >
               <span className="select-none text-green">$</span>
               <span className="whitespace-nowrap">{INSTALL}</span>

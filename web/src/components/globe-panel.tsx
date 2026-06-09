@@ -248,7 +248,7 @@ function CountryPills({
                   : `Rotate the globe to ${row.name}`
               }
               aria-pressed={active}
-              className={`inline-flex cursor-pointer items-center gap-2 rounded-full px-3 py-1.5 font-mono text-2xs ring-1 ring-inset transition-colors ${
+              className={`inline-flex cursor-pointer items-center gap-2 rounded-full px-3 py-1.5 font-mono text-2xs ring-1 ring-inset transition-[background-color,transform] duration-150 ease-out motion-safe:active:scale-[0.97] ${
                 active
                   ? "bg-green/10 ring-green/40"
                   : "bg-white/3 ring-line hover:bg-white/6"

@@ -1,4 +1,5 @@
 import { ComparisonRtk } from "./components/comparison-rtk";
+import { Faq } from "./components/faq";
 import { Footer } from "./components/footer";
 import { GlobePanel } from "./components/globe-panel";
 import { Hero } from "./components/hero";
@@ -56,6 +57,8 @@ export function App() {
         <ComparisonRtk />
 
         <Stargazers stargazers={stargazers} stars={stars} />
+
+        <Faq />
       </main>
 
       <Footer />

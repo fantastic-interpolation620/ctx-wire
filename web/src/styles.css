@@ -361,8 +361,12 @@
   transition: background 0.15s ease;
 }
 
-.program-table tbody tr:hover {
-  background: rgba(142, 234, 122, 0.05);
+/* Hover-only affordances are gated so touch devices don't get sticky
+   tap-triggered hover states; touch reaches the same UI via .is-focused. */
+@media (hover: hover) and (pointer: fine) {
+  .program-table tbody tr:hover {
+    background: rgba(142, 234, 122, 0.05);
+  }
 }
 
 .program-table tbody tr:first-child td {
@@ -668,14 +672,22 @@
   border-top-color: rgba(4, 9, 10, 0.92);
 }
 
-.globe-marker:hover,
 .globe-marker.is-focused {
   z-index: 20;
 }
-.globe-marker:hover .globe-tooltip,
 .globe-marker.is-focused .globe-tooltip {
   opacity: 1;
   translate: -50% 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .globe-marker:hover {
+    z-index: 20;
+  }
+  .globe-marker:hover .globe-tooltip {
+    opacity: 1;
+    translate: -50% 0;
+  }
 }
 
 .globe-marker.is-focused .globe-tooltip {

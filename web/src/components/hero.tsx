@@ -30,7 +30,7 @@ const AGENTS = [
 ];
 
 const TRUST = [
-  "142 filters, 320+ tests",
+  "142 filters, 330+ tests",
   "fail-closed scrubbing",
   "inspect what's filtered",
   "runs fully local",
@@ -153,7 +153,7 @@ export function Hero({ stats }: { stats: ImpactStats }) {
                   aria-selected={active}
                   key={id}
                   onClick={() => setAgent(id)}
-                  className={`relative shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 font-mono text-2xs transition-colors ${
+                  className={`relative shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 font-mono text-2xs transition-[color,transform] duration-150 ease-out motion-safe:active:scale-[0.97] ${
                     active ? "text-green" : "text-label hover:text-fg"
                   }`}
                 >
@@ -433,7 +433,7 @@ function FlowDiagram({
           {items.map((it, i) => (
             <span
               key={it.program}
-              className={`h-1 rounded-full transition-all ${
+              className={`h-1 rounded-full transition-[width,background-color] ease-out ${
                 i === idx ? "w-4 bg-green" : "w-1 bg-dim"
               }`}
             />
