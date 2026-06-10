@@ -104,8 +104,19 @@ func commandLine(name string, args []string) string {
 func streamLive(ctx context.Context, name string, args []string, scrubbedCmd string, spool *tee.Spool, stdout, stderr io.Writer) (int, error) {
 	emitOut := &countWriter{w: stdout}
 	emitErr := &countWriter{w: stderr}
-	outScrub := scrub.NewWriter(emitOut)
-	errScrub := scrub.NewWriter(emitErr)
+	// The passthrough ceiling sits between the scrubber and the agent: the head
+	// streams live, each stream's tail is kept, and the middle of an oversized
+	// dump is omitted with a marker. The spool branch below is NOT limited, so
+	// the full scrubbed output stays recoverable whenever the ceiling fires.
+	var outLim, errLim *ceilWriter
+	outDst, errDst := io.Writer(emitOut), io.Writer(emitErr)
+	if head, tail, enabled := passthroughCeiling(); enabled {
+		ceil := newStreamCeiling(head, tail)
+		outLim, errLim = ceil.writer(emitOut), ceil.writer(emitErr)
+		outDst, errDst = outLim, errLim
+	}
+	outScrub := scrub.NewWriter(outDst)
+	errScrub := scrub.NewWriter(errDst)
 	rawOut := &counter{}
 	rawErr := &counter{}
 
@@ -116,13 +127,21 @@ func streamLive(ctx context.Context, name string, args []string, scrubbedCmd str
 	// Flush held-back bytes regardless of outcome.
 	_ = outScrub.Close()
 	_ = errScrub.Close()
+	truncated := false
+	if outLim != nil {
+		ot, _ := outLim.flush()
+		et, _ := errLim.flush()
+		truncated = ot || et
+	}
 
 	if err != nil {
 		_, _ = spool.Finalize(false)
 		return code, err
 	}
 	recordGain(scrubbedCmd, "", "passthrough", rawOut.n+rawErr.n, emitOut.n+emitErr.n, code)
-	if path, ok := spool.Finalize(code != 0); ok {
+	// Keep the spool when the ceiling fired, exactly like the buffered path
+	// keeps it on truncation: never omit bytes without a recovery path.
+	if path, ok := spool.Finalize(code != 0 || truncated); ok {
 		fmt.Fprintln(stderr, tee.Hint(path))
 	}
 	return code, nil
