@@ -54,7 +54,7 @@ const CAPS = [
   },
   {
     name: "Compress the MCP wire",
-    desc: "mcp-wrap relays any MCP server, measures what each tool costs, and compresses verbose browser snapshots (chrome-devtools, Playwright). Raw stays on disk.",
+    desc: "mcp-wrap relays any MCP server, measures what each tool costs, and compresses verbose browser snapshots. init claude wires chrome-devtools and Playwright automatically; raw stays on disk.",
   },
 ];
 

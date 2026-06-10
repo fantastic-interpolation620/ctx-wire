@@ -43,7 +43,7 @@ const ROWS: Row[] = [
   {
     dim: "MCP tool output",
     rtk: "Focused on shell command output.",
-    ctx: "mcp-wrap relays any MCP server, measures per-tool token cost, and compresses verbose browser snapshots. Raw stays on disk.",
+    ctx: "mcp-wrap relays any MCP server, measures per-tool token cost, and compresses verbose browser snapshots, wired automatically by init claude. Raw stays on disk.",
     note: "mcp wire",
   },
 ];

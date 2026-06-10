@@ -8,7 +8,7 @@ import { fadeUp, staggerContainer } from "../lib/variants";
 const ITEMS = [
   {
     q: "What if a filter doesn't recognize the output?",
-    a: "It passes through untouched. A filter only compresses output it positively recognizes; anything unknown reaches the agent unmodified, and the full log stays on disk for failures and truncation.",
+    a: "It passes through untouched, up to a generous ceiling. A filter only compresses output it positively recognizes, and unknown output reaches the agent unmodified unless a single dump runs past roughly 64 KB; then the head and tail are kept, the omitted middle is marked explicitly, and the full output stays on disk. The ceiling scales with the truncate dial in config, and setting it to none disables even that.",
   },
   {
     q: "Can it corrupt something my agent parses?",
