@@ -12,6 +12,7 @@ func TestClassifyBypass(t *testing.T) {
 	}{
 		{"interactive editor", "vim", []string{"f"}, true, "interactive"},
 		{"interactive full path", "/usr/bin/less", []string{"log"}, true, "interactive"},
+		{"watch clears screen and loops", "watch", []string{"ls"}, true, "interactive"},
 		{"follow flag", "tail", []string{"-f", "app.log"}, true, "streaming"},
 		{"watch flag", "kubectl", []string{"get", "pods", "-w"}, true, "streaming"},
 		{"long follow", "docker", []string{"logs", "--follow", "c1"}, true, "streaming"},

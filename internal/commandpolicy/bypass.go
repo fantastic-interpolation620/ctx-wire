@@ -11,7 +11,7 @@ import (
 // output would hang or corrupt the session.
 var InteractivePrograms = map[string]bool{
 	"vi": true, "vim": true, "nvim": true, "nano": true, "emacs": true,
-	"less": true, "more": true, "top": true, "htop": true, "man": true,
+	"less": true, "more": true, "top": true, "htop": true, "watch": true, "man": true,
 	"ssh": true, "tmux": true, "screen": true, "fzf": true,
 	"gdb": true, "lldb": true, "mysql": true, "psql": true, "redis-cli": true,
 	"python": true, "python3": true, "node": true, "irb": true, "ipython": true,

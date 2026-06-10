@@ -2,8 +2,13 @@
 description = "Compact cargo build/test/check/clippy output"
 match_command = "^cargo\\s+(build|test|check|clippy)\\b"
 strip_ansi = true
+# cargo build/check write "Finished ... target(s)" to STDERR (stdout is empty on a
+# clean check). Without this, on_empty fired "cargo: ok" on the empty stdout while
+# the stderr line leaked through unfiltered, emitting MORE than raw. Filtering the
+# combined stream lets match_output collapse it correctly.
+filter_stderr = true
 match_output = [
-  { pattern = "(?m)(Finished .* target\\(s\\)|test result: ok)", message = "cargo: ok", unless = "(?i)(error|panicked|[1-9][0-9]* failed)" },
+  { pattern = "(?m)(Finished .* target\\(s\\)|test result: ok)", message = "cargo: ok", unless = "(?i)(error|warning|panicked|[1-9][0-9]* failed)" },
 ]
 strip_lines_matching = [
   "^\\s*$",
@@ -44,3 +49,24 @@ running 3 tests
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 """
 expected = "    Finished test [unoptimized + debuginfo] target(s) in 1.45s\nrunning 3 tests\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out"
+
+[[tests.cargo]]
+name = "clean cargo check: Finished on stderr collapses (needs filter_stderr)"
+stderr = "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s"
+expected = "cargo: ok"
+
+[[tests.cargo]]
+name = "successful cargo check warnings are preserved"
+stderr = """
+warning: unused variable: `x`
+  --> src/main.rs:2:9
+   |
+2  |     let x = 1;
+   |         ^ help: if this is intentional, prefix it with an underscore: `_x`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: `app` generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+"""
+expected = "warning: unused variable: `x`\n  --> src/main.rs:2:9\n   |\n2  |     let x = 1;\n   |         ^ help: if this is intentional, prefix it with an underscore: `_x`\n   |\n   = note: `#[warn(unused_variables)]` on by default\nwarning: `app` generated 1 warning\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s"
