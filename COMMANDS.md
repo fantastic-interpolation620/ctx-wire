@@ -35,7 +35,7 @@ commands. For the config file and environment variables see
 | `ctx-wire tune [--since 24h] [--top N]` | Higher-level filter improvement report from gain data (read-only) |
 | `ctx-wire discover [--since 24h] [--top N] [--all]` | Find agent commands (Claude/Codex transcripts) that escaped ctx-wire (read-only) |
 | `ctx-wire learn [--since D] [--all] [--min N] [--write]` | Mine Claude transcripts for failed->corrected commands; `--write` saves `.claude/rules/cli-corrections.md` |
-| `ctx-wire session [--since 24h] [--top N] [--all]` | Per-session ctx-wire adoption across agent transcripts (read-only) |
+| `ctx-wire session [--since 24h] [--top N] [--all]` | Per-session ctx-wire adoption across agent transcripts (read-only). Claude sessions also show built-in Read/Grep tool counts and read-before-edit refusals, the traffic that bypasses ctx-wire entirely |
 | `ctx-wire tune preview` | Dry-run the sanitized bundle contents without writing files |
 | `ctx-wire tune bundle [--out PATH]` | Write a sanitized tune bundle archive for manual sharing |
 | `ctx-wire tune issue [--open]` | Print or open a sanitized GitHub issue draft |
@@ -127,6 +127,8 @@ first on `PATH`, whether any shim captures have been recorded, which agent
 hooks/rules are installed (Claude, Cursor, Codex, Gemini, Cline, Windsurf,
 Kilo Code, Antigravity, OpenCode, Pi, Hermes, Copilot, plus Codex's
 hooks-feature flag), whether MCP config exists for VS Code / Visual Studio,
+which Claude MCP servers are relayed through `mcp-wrap` (warning when a wrap
+points at a stale ctx-wire path that would break the server if it disappears),
 whether the gain and tee directories are writable (with the sandbox fallback),
 and the project filter trust state. It prints counts only by default; pass
 `--recent N` (or `--verbose`) to also list the last N scrubbed commands. Exit
