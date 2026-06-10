@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"unicode/utf8"
 
 	"ctx-wire/internal/filter"
 )
@@ -77,21 +78,70 @@ func (w *ceilWriter) Write(p []byte) (int, error) {
 	// is split so the head stays byte-exact.
 	if w.c.head > 0 {
 		live := min(len(p), w.c.head)
+		// The head/omitted boundary must land on a UTF-8 rune boundary: a marker
+		// inserted between a multibyte rune's bytes (CJK, emoji) would corrupt it
+		// into mojibake. When this write exhausts the budget, snap the cut down to
+		// a whole rune and consider the budget spent; the partial rune flows into
+		// the tail/omitted region with the rest.
+		if live == w.c.head {
+			live = snapDownRune(p, live)
+			w.c.head = 0
+		} else {
+			w.c.head -= live
+		}
 		if _, err := w.dst.Write(p[:live]); err != nil {
 			return 0, err
 		}
-		w.c.head -= live
 		p = p[live:]
 	}
 	// Beyond the head: keep only the last tail-cap bytes of this stream.
 	if len(p) > 0 {
 		w.tail = append(w.tail, p...)
 		if over := len(w.tail) - w.c.tail; over > 0 {
+			// Snap the front trim up to a rune boundary so the tail never STARTS
+			// mid-rune (the omitted/tail boundary, the other place the marker could
+			// split a character).
+			over = snapUpRune(w.tail, over)
 			w.omitted += over
 			w.tail = append(w.tail[:0], w.tail[over:]...)
 		}
 	}
 	return n, nil
+}
+
+// snapDownRune returns the largest m <= n (and <= len(p)) such that p[:m] has no
+// partial trailing UTF-8 rune. It tests completeness WITHIN p[:n] (utf8.FullRune
+// on p[lead:n]), so a multibyte rune whose continuation bytes have not arrived
+// yet (the lead byte is the last byte of this chunk) is correctly snapped off,
+// not kept. An invalid byte is a complete RuneError of size 1, so binary content
+// returns the cut unchanged.
+func snapDownRune(p []byte, n int) int {
+	if n > len(p) {
+		n = len(p)
+	}
+	i := n
+	for i > 0 && !utf8.RuneStart(p[i-1]) {
+		i-- // back over continuation bytes to the rune's lead byte
+	}
+	if i == 0 {
+		return n
+	}
+	if utf8.FullRune(p[i-1 : n]) {
+		return n // the trailing rune is fully present within p[:n]; cut is clean
+	}
+	return i - 1 // truncated multibyte rune at the cut: drop it
+}
+
+// snapUpRune returns the smallest m >= n such that p[m:] starts on a rune
+// boundary, dropping a partial leading rune at the cut. The scan is capped at
+// utf8.UTFMax-1 continuation bytes (the most a real leading partial rune can
+// have), so invalid/binary content with long continuation-byte runs is not
+// reshuffled past one rune's worth.
+func snapUpRune(p []byte, n int) int {
+	for skipped := 0; skipped < utf8.UTFMax-1 && n < len(p) && !utf8.RuneStart(p[n]); skipped++ {
+		n++
+	}
+	return n
 }
 
 // flush emits the held tail. When bytes were actually omitted (the diverted

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"ctx-wire/internal/tee"
 )
@@ -140,5 +141,97 @@ func TestCeilingBothStreamsShareHeadBudget(t *testing.T) {
 	total := len(stdout) + len(stderr)
 	if total > 1024+2*256+512 {
 		t.Errorf("combined emit %d bytes, want bounded by head + both tails + markers", total)
+	}
+}
+
+// TestCeilingSnapsToRuneBoundary pins the CJK fix: when the ceiling fires on
+// multibyte UTF-8 (CJK, emoji), neither the head cut nor the tail front-trim
+// may land inside a rune, or the marker would corrupt a character into mojibake
+// (invalid UTF-8). 中 is 3 bytes; head=10 and tail=10 are not multiples of 3, so
+// both cuts deliberately land mid-rune, and the output must still be valid UTF-8
+// of whole 中s.
+func TestCeilingSnapsToRuneBoundary(t *testing.T) {
+	shrinkCeiling(t, 10, 10)
+	// 100 中 = 300 bytes, far over head+tail, so the ceiling fires and both cuts
+	// fall mid-rune. Octal escapes (\344\270\255 = 中) keep it POSIX-portable.
+	stdout, _, code := runStream(t, `printf '\344\270\255%.0s' $(seq 1 100)`)
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(stdout, "bytes omitted") {
+		t.Fatalf("ceiling did not fire:\n%q", stdout)
+	}
+	if !utf8.ValidString(stdout) {
+		t.Errorf("output is not valid UTF-8 (a rune was split at a cut):\n%q", stdout)
+	}
+	head, _, found := strings.Cut(stdout, "\n[ctx-wire:")
+	if !found {
+		t.Fatalf("marker not found:\n%q", stdout)
+	}
+	if strings.TrimRight(head, "中") != "" {
+		t.Errorf("head is not whole 中 runes (split at the head cut): %q", head)
+	}
+	_, tail, _ := strings.Cut(stdout, "spooled]\n")
+	if strings.TrimRight(tail, "中") != "" {
+		t.Errorf("tail is not whole 中 runes (split at the tail cut): %q", tail)
+	}
+}
+
+// TestCeilingHeadZeroOrderAcrossWrites pins the load-bearing `w.c.head = 0`
+// invariant: after the head cut snaps down (diverting a partial rune to the
+// tail), the budget must read as spent, or a LATER write would race bytes into
+// the head ahead of the already-diverted rune and reorder the output. The bug
+// only shows across writes and only with DISTINCT runes (identical runes can't
+// reveal a reorder), so this is the test the single-Write snap test could not
+// be. Delete `w.c.head = 0` and this fails (本/日 swap); the suite otherwise
+// stays green.
+func TestCeilingHeadZeroOrderAcrossWrites(t *testing.T) {
+	var dst bytes.Buffer
+	w := newStreamCeiling(10, 1000).writer(&dst) // head=10 splits the 4th 3-byte rune
+	w.Write([]byte("中文字本"))                      // 12 bytes; head snaps to 9 (中文字), 本 diverts to tail
+	w.Write([]byte("日"))                         // must land AFTER 本 in the tail, not race into the head
+	if _, err := w.flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	if got := dst.String(); got != "中文字本日" {
+		t.Fatalf("out of order across writes: got %q want 中文字本日", got)
+	}
+}
+
+func TestSnapDownRune(t *testing.T) {
+	zh := []byte("中") // e4 b8 ad
+	cases := []struct {
+		name string
+		p    []byte
+		n    int
+		want int
+	}{
+		{"clean boundary", zh, 3, 3},
+		{"mid rune", zh, 2, 0},
+		{"lead byte only (continuations not yet in chunk)", zh[:1], 1, 0},
+		{"second rune lead only", []byte("中中")[:4], 4, 3},
+		{"ascii untouched", []byte("abcd"), 3, 3},
+		{"invalid binary kept", []byte{0xff}, 1, 1},
+	}
+	for _, c := range cases {
+		if got := snapDownRune(c.p, c.n); got != c.want {
+			t.Errorf("%s: snapDownRune(%v,%d)=%d want %d", c.name, c.p, c.n, got, c.want)
+		}
+	}
+}
+
+func TestSnapUpRune(t *testing.T) {
+	zh := []byte("中")
+	if got := snapUpRune(zh, 1); got != 3 { // drop the partial leading 中
+		t.Errorf("snapUpRune(中,1)=%d want 3", got)
+	}
+	if got := snapUpRune([]byte("a中"), 1); got != 1 { // already a boundary (中's lead)
+		t.Errorf("snapUpRune(a中,1)=%d want 1", got)
+	}
+	// Invalid binary: a long continuation-byte run must not be skipped past one
+	// rune's worth (cap at UTFMax-1 = 3).
+	bin := []byte{0x80, 0x80, 0x80, 0x80, 0x80}
+	if got := snapUpRune(bin, 0); got != 3 {
+		t.Errorf("snapUpRune(binary,0)=%d want 3 (capped)", got)
 	}
 }
