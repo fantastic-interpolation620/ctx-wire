@@ -107,6 +107,8 @@ export function TerminalWindow({ stats }: Props) {
               </dt>
               <dd className="m-0 flex min-w-0 items-baseline gap-2.5">
                 <Meter value={pct} width={28} />
+                {/* Brand exception: the headline percent stays green even in the
+                    30-70 band where the CLI would render yellow. */}
                 <span className="text-green">({pct.toFixed(1)}%)</span>
               </dd>
             </div>
@@ -148,14 +150,24 @@ export function TerminalWindow({ stats }: Props) {
   );
 }
 
+// pctTone mirrors the CLI's value-based percent coloring (ui.Theme.PercentBare:
+// >=70 green, >=30 yellow, else dim), so the replica colors match a real run.
+function pctTone(v: number): string {
+  if (v >= 70) return "text-green";
+  if (v >= 30) return "text-yellow";
+  return "text-dim";
+}
+
 function Summary({
   label,
   suffix,
+  suffixTone,
   tone,
   value,
 }: {
   label: string;
   suffix?: string;
+  suffixTone?: string;
   tone: string;
   value: string;
 }) {
@@ -164,7 +176,7 @@ function Summary({
       <dt className="m-0 w-36 shrink-0 text-label sm:w-44">{label}:</dt>
       <dd className="m-0">
         <span className={tone}>{value}</span>
-        {suffix ? <span className={tone}> {suffix}</span> : null}
+        {suffix ? <span className={suffixTone ?? tone}> {suffix}</span> : null}
       </dd>
     </div>
   );
@@ -191,13 +203,7 @@ function ProgramRow({
       <td>{program.program}</td>
       <td>{formatInt(runs)}</td>
       <td>{formatBytes(saved)}</td>
-      <td
-        className={
-          avg > 70 ? "text-green" : avg > 35 ? "text-yellow" : "text-dim"
-        }
-      >
-        {avg.toFixed(1)}%
-      </td>
+      <td className={pctTone(avg)}>{avg.toFixed(1)}%</td>
       <td>
         <Meter value={impact} width={18} compact />
       </td>
@@ -223,6 +229,9 @@ function Meter({
       className={compact ? "meter meter-compact" : "meter"}
       aria-hidden="true"
     >
+      {/* The CLI renders the fill as a light shade; on the web that washes out
+          at this font size, so the replica keeps the denser glyph (the "hard"
+          green bar is part of the site's look). */}
       <span className="text-green">{"▓".repeat(filled)}</span>
       <span className="text-dim">{"░".repeat(width - filled)}</span>
     </span>
