@@ -185,10 +185,44 @@ func rewriteCore(core, wrap string) (rewritten, inner string, wrapped bool, reas
 		}
 		return rewritten, inner, true, ""
 	}
+	// An explicitly typed `ctx-wire run <cmd>` (the form agent instructions
+	// teach) is already wrapped but carries no attribution, and inside a
+	// sandboxed agent shell the process-tree fallback is blind, so the savings
+	// land as (unattributed). When this rewrite runs for a known agent, stamp
+	// the agent in instead of passing the line through.
+	if stamped, inner, ok := stampWrappedAgent(core, wrap); ok {
+		return stamped, inner, true, ""
+	}
 	if r := passReason(core); r != "" {
 		return core, "", false, r
 	}
 	return wrap + core, core, true, ""
+}
+
+// stampWrappedAgent rewrites `ctx-wire run <cmd>` to `ctx-wire run --agent
+// <name> <cmd>` when wrap is an agent-scoped variant. Fail-open by shape: it
+// only fires for a bare `run` immediately followed by a non-flag token, so an
+// explicit `--agent` (the user's choice wins), `--shim`, or any unknown flag
+// order passes through untouched. The ctx-wire binary may be path-qualified;
+// the path form is preserved.
+func stampWrappedAgent(core, wrap string) (stamped, inner string, ok bool) {
+	if wrap == prefix || !strings.HasPrefix(wrap, "ctx-wire run --agent ") {
+		return "", "", false // no agent to stamp
+	}
+	first := firstToken(core)
+	if filepath.Base(first) != "ctx-wire" {
+		return "", "", false
+	}
+	rest := strings.TrimSpace(core[len(first):])
+	if !strings.HasPrefix(rest, "run ") {
+		return "", "", false // gain/doctor/other subcommands are not runs
+	}
+	cmd := strings.TrimSpace(rest[len("run "):])
+	if cmd == "" || strings.HasPrefix(cmd, "-") {
+		return "", "", false // flags present: leave the invocation alone
+	}
+	agentFlags := strings.TrimSuffix(strings.TrimPrefix(wrap, "ctx-wire run "), " ")
+	return first + " run " + agentFlags + " " + cmd, cmd, true
 }
 
 // rewritePipeline wraps the final stage of a pipeline whose last top-level pipe

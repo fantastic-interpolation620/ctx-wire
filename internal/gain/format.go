@@ -72,7 +72,7 @@ func FormatThemed(s *Summary, theme ui.Theme) string {
 		for _, st := range s.BySource {
 			label := st.Source
 			if label == "" {
-				label = "(untagged)"
+				label = "(unattributed)"
 			}
 			rows = append(rows, []string{
 				label,
@@ -95,10 +95,12 @@ func FormatThemed(s *Summary, theme ui.Theme) string {
 			}
 		}
 		rows := make([][]string, 0, len(s.ByAgent))
+		hasUnattributed := false
 		for _, st := range s.ByAgent {
 			label := st.Agent
 			if label == "" {
-				label = "(untagged)"
+				label = "(unattributed)"
+				hasUnattributed = true
 			}
 			rows = append(rows, []string{
 				label,
@@ -110,6 +112,9 @@ func FormatThemed(s *Summary, theme ui.Theme) string {
 		}
 		b.WriteString(gt.agentTable(rows))
 		b.WriteByte('\n')
+		if hasUnattributed {
+			fmt.Fprintf(&b, "%s\n", gt.Dim.Render("unattributed = agent unknown: run outside an agent hook, or the invoking agent was not detectable (codex sandbox: `ctx-wire init codex` fixes this; scripts can set CTX_WIRE_AGENT)"))
+		}
 	}
 	actionable := actionableOpportunities(s.Opportunities)
 	if len(actionable) > 0 {

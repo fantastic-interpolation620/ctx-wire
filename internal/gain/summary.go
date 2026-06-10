@@ -245,7 +245,7 @@ type Summary struct {
 	SavedBytes    int64
 	ByProgram     []CommandStat     // sorted by SavedBytes descending
 	ByAgent       []AgentStat       // sorted by SavedBytes desc, unattributed last
-	BySource      []SourceStat      // sorted by SavedBytes desc, untagged last
+	BySource      []SourceStat      // sorted by SavedBytes desc, unattributed last
 	Opportunities []OpportunityStat // sorted by EmittedBytes descending
 }
 

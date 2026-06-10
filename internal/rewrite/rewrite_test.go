@@ -120,3 +120,55 @@ func TestLineIdempotent(t *testing.T) {
 		t.Errorf("rewrite not idempotent:\n once:  %q\n twice: %q", once, twice)
 	}
 }
+
+// TestLineForAgentStampsWrappedRuns pins the attribution stamp: an explicitly
+// typed `ctx-wire run <cmd>` (the form agent instructions teach) gains
+// `--agent <name>` so sandboxed shells (where the ps-walk is blind) still
+// attribute savings. Fail-open shapes are enumerated: explicit --agent wins,
+// flag-first invocations and non-run subcommands stay untouched, and the
+// no-agent rewrite (plain Line) never stamps.
+func TestLineForAgentStampsWrappedRuns(t *testing.T) {
+	tests := []struct {
+		name  string
+		agent string
+		in    string
+		want  string
+	}{
+		{"bare wrapped run gains the stamp", "claude",
+			"ctx-wire run sed -n '1,10p' f.go",
+			"ctx-wire run --agent claude sed -n '1,10p' f.go"},
+		{"explicit agent wins, no double stamp", "claude",
+			"ctx-wire run --agent codex git status",
+			"ctx-wire run --agent codex git status"},
+		{"flag-first invocation left alone", "claude",
+			"ctx-wire run --shim git status",
+			"ctx-wire run --shim git status"},
+		{"non-run subcommand left alone", "claude",
+			"ctx-wire gain",
+			"ctx-wire gain"},
+		{"path-qualified binary keeps its path", "claude",
+			"/usr/local/bin/ctx-wire run git status",
+			"/usr/local/bin/ctx-wire run --agent claude git status"},
+		// The stub lookPath makes every binary wrappable, so the assertion for
+		// a non-ctx-wire basename is: normally WRAPPED (stamp did not fire and
+		// inject --agent into a foreign binary's argv).
+		{"non-ctx-wire binary wraps normally, never stamped", "claude",
+			"/definitely/missing/cw-dev run git status",
+			"ctx-wire run --agent claude /definitely/missing/cw-dev run git status"},
+		{"pipeline tail gets stamped", "claude",
+			"rg TODO . | ctx-wire run wc -l",
+			"rg TODO . | ctx-wire run --agent claude wc -l"},
+		{"env prefix peeled then stamped", "claude",
+			"FOO=bar ctx-wire run git status",
+			"FOO=bar ctx-wire run --agent claude git status"},
+	}
+	for _, tt := range tests {
+		if got := LineForAgent(tt.in, tt.agent); got != tt.want {
+			t.Errorf("%s: LineForAgent(%q) = %q, want %q", tt.name, tt.in, got, tt.want)
+		}
+	}
+	// Plain Line (no agent) must never stamp: there is nothing to attribute.
+	if got := Line("ctx-wire run git status"); got != "ctx-wire run git status" {
+		t.Errorf("Line must not stamp without an agent, got %q", got)
+	}
+}

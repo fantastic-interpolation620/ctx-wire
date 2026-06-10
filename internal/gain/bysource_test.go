@@ -7,7 +7,7 @@ import (
 
 // The by-source breakdown is the instrument for "are hook-path and shim-path
 // savings comparable?" It must bucket entries by source, sum correctly, sort by
-// savings with untagged last, and surface in the summary output.
+// savings with unattributed last, and surface in the summary output.
 func TestBySourceBreakdown(t *testing.T) {
 	useTempLog(t)
 	rec := func(cmd, agent, source string, raw, emitted int) {
@@ -19,7 +19,7 @@ func TestBySourceBreakdown(t *testing.T) {
 	rec("c2", "claude", "hook", 2000, 200) // hook saved 1800 (hook total: 2 cmds, 2700)
 	rec("c3", "cline", "shim", 500, 50)    // shim saved 450
 	rec("c4", "", "run", 100, 10)          // run saved 90
-	rec("c5", "", "", 300, 30)             // untagged (pre-tag) saved 270
+	rec("c5", "", "", 300, 30)             // unattributed (pre-tag) saved 270
 
 	s, err := Summarize()
 	if err != nil {
@@ -39,12 +39,12 @@ func TestBySourceBreakdown(t *testing.T) {
 	if r := by["run"]; r.SavedBytes != 90 {
 		t.Errorf("run bucket: got %d saved, want 90", r.SavedBytes)
 	}
-	// Sorted by savings desc; the untagged ("") bucket must sink last.
+	// Sorted by savings desc; the unattributed ("") bucket must sink last.
 	if s.BySource[0].Source != "hook" {
 		t.Errorf("by-source must lead with the biggest saver (hook); got %q", s.BySource[0].Source)
 	}
 	if last := s.BySource[len(s.BySource)-1].Source; last != "" {
-		t.Errorf("untagged source must sort last; got %q", last)
+		t.Errorf("unattributed source must sort last; got %q", last)
 	}
 
 	out := Format(s)
