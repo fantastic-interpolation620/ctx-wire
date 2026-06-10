@@ -26,6 +26,14 @@ transparent_prefixes = ["docker exec web", "direnv exec ."]
 # blank-line runs) for a few more tokens.
 ultra_compact = true
 
+# Truncation dial: scales every filter's numeric caps (truncate_lines_at,
+# head/tail, max_lines, group caps) without editing TOML. "light" doubles the
+# caps (keep more), "aggressive" halves them (save more, floor 1), "none"
+# removes them, "default" applies them as written. Filters still only act on
+# output they positively recognize; the dial changes how much of it is kept,
+# never what gets filtered. Override per invocation with CTX_WIRE_TRUNCATE.
+truncate = "default"
+
 # Optional token budget framing for `ctx-wire gain --quota`.
 # 0 means no budget; ctx-wire will show context-window multiples instead.
 monthly_token_budget = 2000000

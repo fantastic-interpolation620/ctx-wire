@@ -52,6 +52,13 @@ func main() {
 		commandpolicy.SetExcludedCommands(cfg.Hooks.ExcludeCommands)
 		commandpolicy.SetTransparentPrefixes(cfg.Hooks.TransparentPrefixes)
 		filter.SetUltraCompact(cfg.Output.UltraCompact)
+		if cfg.Output.Truncate != "" {
+			if lvl, ok := filter.ParseTruncateLevel(cfg.Output.Truncate); ok {
+				filter.SetConfiguredTruncateLevel(lvl)
+			} else {
+				fmt.Fprintf(os.Stderr, "ctx-wire: unknown [output] truncate level %q; using default\n", cfg.Output.Truncate)
+			}
+		}
 		ret := recent.Options{
 			Enabled:    cfg.Retention.Enabled,
 			RawBodies:  cfg.Retention.RawBodies,

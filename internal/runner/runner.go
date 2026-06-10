@@ -165,6 +165,7 @@ func runBuffered(ctx context.Context, reg *filter.Registry, name string, args []
 		applied := applySafe(f, text, filter.ApplyOptions{
 			SuppressSyntheticSuccess: failed,
 			KeepTailOnTruncate:       failed,
+			TruncateLevel:            filter.ResolveTruncateLevel(),
 		})
 		if jsonText, jsonMode, ok := jsonGuard(out, applied.Truncated, f.FilterStderr, f.ReducesJSON()); ok {
 			mode = jsonMode
