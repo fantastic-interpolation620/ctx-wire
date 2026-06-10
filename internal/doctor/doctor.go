@@ -472,19 +472,26 @@ func claudeMCPWrapChecks() []Check {
 	if err != nil {
 		return nil
 	}
-	raw, err := os.ReadFile(filepath.Join(home, ".claude.json"))
+	exe, err := os.Executable()
+	if err == nil {
+		if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
+			exe = resolved
+		}
+	}
+	return claudeMCPWrapChecksAt(filepath.Join(home, ".claude.json"), exe)
+}
+
+// claudeMCPWrapChecksAt is the pure core, parameterized over the config path
+// and the current binary so the healthy/stale distinction is testable (a test
+// binary is never named ctx-wire, so os.Executable cannot exercise it).
+func claudeMCPWrapChecksAt(configPath, exe string) []Check {
+	raw, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil // no Claude config: nothing to report
 	}
 	var cfg map[string]any
 	if json.Unmarshal(raw, &cfg) != nil {
 		return nil
-	}
-	exe, err := os.Executable()
-	if err == nil {
-		if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
-			exe = resolved
-		}
 	}
 	var current, stale []string
 	visit := func(servers map[string]any) {

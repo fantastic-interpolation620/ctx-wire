@@ -1,6 +1,9 @@
 package doctor
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -135,4 +138,57 @@ func TestFormatThemedHidesOffByDefault(t *testing.T) {
 	if strings.Contains(all, "hidden") {
 		t.Errorf("--all view must not print the hidden-count line:\n%s", all)
 	}
+}
+
+// TestClaudeMCPWrapChecks pins the doctor surface for MCP wraps in
+// ~/.claude.json: a wrap launched through THIS binary reports healthy, a wrap
+// pointing at a stale ctx-wire path warns (auto-wrap deliberately refuses to
+// touch it, so doctor is the only place the user learns the server will break
+// when that path disappears), and unwrapped servers are not mentioned at all.
+func TestClaudeMCPWrapChecks(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "bin", "ctx-wire") // what a real install resolves to
+	cfg := `{
+  "mcpServers": {
+    "healthy": {"command":` + jsonQuote(exe) + `,"args":["mcp-wrap","--compress","--","npx","chrome-devtools-mcp@latest"]},
+    "stale":   {"command":"/old/gone/ctx-wire","args":["mcp-wrap","--","npx","@playwright/mcp@latest"]},
+    "plain":   {"command":"node","args":["x.js"]}
+  }
+}`
+	configPath := filepath.Join(dir, ".claude.json")
+	if err := os.WriteFile(configPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := claudeMCPWrapChecksAt(configPath, exe)
+	var okDetail, warnDetail string
+	for _, c := range checks {
+		switch c.Status {
+		case OK:
+			okDetail = c.Detail
+		case Warn:
+			warnDetail = c.Detail
+		}
+	}
+	if !strings.Contains(okDetail, "healthy") {
+		t.Errorf("healthy wrap not reported OK: %+v", checks)
+	}
+	if !strings.Contains(warnDetail, "stale") || !strings.Contains(warnDetail, "/old/gone/ctx-wire") {
+		t.Errorf("stale wrap not warned with its path: %+v", checks)
+	}
+	for _, c := range checks {
+		if strings.Contains(c.Detail, "plain") {
+			t.Errorf("unwrapped server must not appear: %+v", c)
+		}
+	}
+
+	// No config file at all: silent, never an error row.
+	if got := claudeMCPWrapChecksAt(filepath.Join(dir, "nope.json"), exe); len(got) != 0 {
+		t.Errorf("missing config must produce no checks, got %+v", got)
+	}
+}
+
+func jsonQuote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }
