@@ -414,13 +414,16 @@ func (m *mcpMeasure) openSpool() {
 	if os.MkdirAll(dir, 0o700) != nil {
 		return
 	}
-	path := filepath.Join(dir, "mcp-spool-"+time.Now().UTC().Format("20060102-150405")+".jsonl")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	// CreateTemp gives each session its own exclusive file: two relays started
+	// in the same second must never share a spool (intermixed raw results and a
+	// jointly-bypassed per-session cap). The timestamp stays in the name for
+	// human browsing; the random suffix guarantees uniqueness.
+	f, err := os.CreateTemp(dir, "mcp-spool-"+time.Now().UTC().Format("20060102-150405")+"-*.jsonl")
 	if err != nil {
 		return
 	}
 	m.spool = f
-	m.spoolPath = path
+	m.spoolPath = f.Name()
 }
 
 func (m *mcpMeasure) closeSpool() {

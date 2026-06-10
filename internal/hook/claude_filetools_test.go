@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -226,4 +227,39 @@ func TestFileToolUnknownFieldsFailOpen(t *testing.T) {
 	if _, ok := mapFileToolSuggestion("Read", []byte(`{"file_path":"/abs/big.go"}`), bigText); !ok {
 		t.Error("known-field read payload must still map")
 	}
+}
+
+// TestLockDenyStateExcludesAndRecoversStale pins the loop-breaker lock: a held
+// lock blocks a second acquire (fail open), and a stale lock from a crashed
+// hook is taken over instead of wedging denies forever.
+func TestLockDenyStateExcludesAndRecoversStale(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "denies.json")
+	unlock, ok := lockDenyState(path)
+	if !ok {
+		t.Fatal("first lock must succeed")
+	}
+	done := make(chan bool, 1)
+	go func() {
+		_, ok2 := lockDenyState(path) // contends ~100ms then gives up
+		done <- ok2
+	}()
+	if ok2 := <-done; ok2 {
+		t.Error("second lock must fail while the first is held (fail open)")
+	}
+	unlock()
+
+	// Stale takeover: a lock older than the threshold is removed and acquired.
+	lock := path + ".lock"
+	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-10 * time.Second)
+	if err := os.Chtimes(lock, old, old); err != nil {
+		t.Fatal(err)
+	}
+	unlock2, ok := lockDenyState(path)
+	if !ok {
+		t.Fatal("stale lock must be taken over")
+	}
+	unlock2()
 }

@@ -54,9 +54,18 @@ var (
 
 func upsertHooksKey(content, line string) string {
 	lines := strings.Split(content, "\n")
-	// Replace an existing key line wherever it is.
+	// Replace an existing key line, but ONLY inside the [hooks] section: the
+	// same key name under another table belongs to someone else, and rewriting
+	// it would corrupt that section while silently leaving [hooks] unset.
+	inHooks := false
 	for i, l := range lines {
-		if captureKeyRe.MatchString(l) {
+		trimmed := strings.TrimSpace(l)
+		switch {
+		case hooksHeaderRe.MatchString(trimmed):
+			inHooks = true
+		case anySectionRe.MatchString(l):
+			inHooks = false
+		case inHooks && captureKeyRe.MatchString(l):
 			lines[i] = hooksKeyIndent + line
 			return strings.Join(lines, "\n")
 		}
@@ -71,7 +80,6 @@ func upsertHooksKey(content, line string) string {
 		}
 	}
 	// No [hooks] section: append one. Guard against a final partial line.
-	_ = anySectionRe
 	text := strings.TrimRight(content, "\n")
 	if text != "" {
 		text += "\n\n"

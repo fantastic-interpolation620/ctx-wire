@@ -216,3 +216,21 @@ func TestRelayMCPForwardsVerbatim(t *testing.T) {
 		t.Errorf("hook called %d times, want 3 (incl. the trailing partial line)", hookCalls)
 	}
 }
+
+// TestOpenSpoolUniquePerSession pins the collision fix: two relays started in
+// the same second must get distinct recovery spools, never a shared file.
+func TestOpenSpoolUniquePerSession(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	a := &mcpMeasure{tools: map[string]*toolStat{}, pending: map[string]string{}, compress: true, spoolCap: mcpRawSpoolCap}
+	b := &mcpMeasure{tools: map[string]*toolStat{}, pending: map[string]string{}, compress: true, spoolCap: mcpRawSpoolCap}
+	a.openSpool()
+	b.openSpool()
+	defer a.closeSpool()
+	defer b.closeSpool()
+	if a.spool == nil || b.spool == nil {
+		t.Fatalf("spools did not open: a=%v b=%v", a.spoolPath, b.spoolPath)
+	}
+	if a.spoolPath == b.spoolPath {
+		t.Errorf("two sessions share one spool: %s", a.spoolPath)
+	}
+}

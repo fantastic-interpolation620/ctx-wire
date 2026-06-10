@@ -38,6 +38,19 @@ func recordDenyOnce(sessionID, tool string, input []byte) bool {
 	if err != nil {
 		return false
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return false
+	}
+	// Claude can issue tool calls in parallel, so two hook processes can race
+	// this read/modify/write. An O_EXCL lock serializes them; failing to get
+	// the lock fails OPEN (no deny), because an unrecorded deny is the one
+	// state the loop-breaker must never produce.
+	unlock, ok := lockDenyState(path)
+	if !ok {
+		return false
+	}
+	defer unlock()
+
 	sum := sha256.Sum256([]byte(sessionID + "\x00" + tool + "\x00" + string(input)))
 	key := hex.EncodeToString(sum[:])
 	now := time.Now()
@@ -61,16 +74,45 @@ func recordDenyOnce(sessionID, tool string, input []byte) bool {
 	if err != nil {
 		return false
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	// Unique temp file: a fixed name could be clobbered by a process that has
+	// not yet observed the lock (or one racing a stale-lock takeover).
+	tmp, err := os.CreateTemp(filepath.Dir(path), denyStateName+".*.tmp")
+	if err != nil {
 		return false
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	tmpName := tmp.Name()
+	if _, werr := tmp.Write(data); werr != nil {
+		tmp.Close()
+		_ = os.Remove(tmpName)
 		return false
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	if cerr := tmp.Close(); cerr != nil {
+		_ = os.Remove(tmpName)
+		return false
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
 		return false
 	}
 	return true
+}
+
+// lockDenyState acquires an exclusive advisory lock via O_CREATE|O_EXCL with a
+// short bounded wait. A lock left behind by a crashed hook is taken over once
+// it is clearly stale (hooks finish in milliseconds; 2s is generous).
+func lockDenyState(path string) (func(), bool) {
+	lock := path + ".lock"
+	for i := 0; i < 20; i++ {
+		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			f.Close()
+			return func() { _ = os.Remove(lock) }, true
+		}
+		if fi, serr := os.Stat(lock); serr == nil && time.Since(fi.ModTime()) > 2*time.Second {
+			_ = os.Remove(lock) // stale: owner crashed; the next loop retries the create
+			continue
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return nil, false
 }

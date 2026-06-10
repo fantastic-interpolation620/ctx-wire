@@ -3,6 +3,7 @@ package discover
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -130,5 +131,39 @@ func TestSessionsSkipsNonRoutable(t *testing.T) {
 	}
 	if len(stats) != 0 {
 		t.Errorf("session with no routable commands should be skipped, got %+v", stats)
+	}
+}
+
+// TestSessionsIncludesFileToolOnlySessions pins the baseline fix: a transcript
+// with ONLY built-in Read/Grep traffic (zero coverable shell commands) is
+// exactly the gap the capture experiment measures and must appear in the
+// session table, with shell adoption columns at zero.
+func TestSessionsIncludesFileToolOnlySessions(t *testing.T) {
+	base := t.TempDir()
+	project := "/tmp/ftonly"
+	dir := filepath.Join(base, "projects", encodeClaudeProjectSlug(project))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lines := []string{
+		`{"type":"assistant","timestamp":"2026-06-04T10:00:00Z","message":{"content":[{"type":"tool_use","name":"Read","input":{}}]}}`,
+		`{"type":"assistant","timestamp":"2026-06-04T10:01:00Z","message":{"content":[{"type":"tool_use","name":"Grep","input":{}}]}}`,
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ft.jsonl"), []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stats, err := Sessions(Options{ClaudeDirs: []string{base}, Project: project})
+	if err != nil {
+		t.Fatalf("Sessions: %v", err)
+	}
+	if len(stats) != 1 {
+		t.Fatalf("got %d sessions, want the file-tool-only one", len(stats))
+	}
+	s := stats[0]
+	if s.Coverable != 0 || s.Covered != 0 {
+		t.Errorf("shell columns must stay zero, got coverable=%d covered=%d", s.Coverable, s.Covered)
+	}
+	if s.FileTools.Reads != 1 || s.FileTools.Greps != 1 {
+		t.Errorf("FileTools = %+v, want Reads=1 Greps=1", s.FileTools)
 	}
 }

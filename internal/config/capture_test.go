@@ -76,3 +76,27 @@ func TestSetCaptureFileToolsNoHooksSection(t *testing.T) {
 		t.Fatalf("appended section broken: %+v, %v", cfg, err)
 	}
 }
+
+// TestSetCaptureFileToolsIgnoresForeignSection pins the section-scoping fix:
+// a capture_file_tools key under some OTHER table must never be rewritten;
+// the real key is inserted under [hooks].
+func TestSetCaptureFileToolsIgnoresForeignSection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	orig := "[other]\ncapture_file_tools = false # not ours\n\n[hooks]\nexclude_commands = [\"curl\"]\n"
+	if err := os.WriteFile(path, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CTX_WIRE_CONFIG", path)
+	if _, err := SetCaptureFileTools(true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(path)
+	s := string(got)
+	if !strings.Contains(s, "capture_file_tools = false # not ours") {
+		t.Errorf("foreign section's key was rewritten:\n%s", s)
+	}
+	if !strings.Contains(s, "[hooks]\ncapture_file_tools = true") {
+		t.Errorf("[hooks] did not gain the key:\n%s", s)
+	}
+}

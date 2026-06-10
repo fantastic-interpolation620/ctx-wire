@@ -7,11 +7,13 @@
 package doctor
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 
 	"ctx-wire/internal/config"
@@ -456,7 +458,92 @@ func mcpSection(opts Options) Section {
 	if vs, err := install.VisualStudioMCPPath(); err == nil {
 		sec.Checks = append(sec.Checks, mcpCheck("visualstudio (user)", vs))
 	}
+	sec.Checks = append(sec.Checks, claudeMCPWrapChecks()...)
 	return sec
+}
+
+// claudeMCPWrapChecks inspects ~/.claude.json for servers relayed through
+// ctx-wire mcp-wrap. Wraps pointing at THIS binary are healthy; a wrap whose
+// ctx-wire path no longer matches (an old install location) is the one state
+// auto-wrap deliberately refuses to touch, so doctor is where it must surface:
+// that server breaks the moment the stale binary disappears.
+func claudeMCPWrapChecks() []Check {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	raw, err := os.ReadFile(filepath.Join(home, ".claude.json"))
+	if err != nil {
+		return nil // no Claude config: nothing to report
+	}
+	var cfg map[string]any
+	if json.Unmarshal(raw, &cfg) != nil {
+		return nil
+	}
+	exe, err := os.Executable()
+	if err == nil {
+		if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
+			exe = resolved
+		}
+	}
+	var current, stale []string
+	visit := func(servers map[string]any) {
+		for name, v := range servers {
+			sc, ok := v.(map[string]any)
+			if !ok {
+				continue
+			}
+			cmd, _ := sc["command"].(string)
+			args, _ := sc["args"].([]any)
+			first := ""
+			if len(args) > 0 {
+				first, _ = args[0].(string)
+			}
+			if !strings.HasSuffix(filepath.Base(cmd), "ctx-wire") || first != "mcp-wrap" {
+				continue
+			}
+			if cmd == exe {
+				current = append(current, name)
+			} else {
+				stale = append(stale, name+" ("+cmd+")")
+			}
+		}
+	}
+	if servers, ok := cfg["mcpServers"].(map[string]any); ok {
+		visit(servers)
+	}
+	if projects, ok := cfg["projects"].(map[string]any); ok {
+		for _, pv := range projects {
+			if pm, ok := pv.(map[string]any); ok {
+				if servers, ok := pm["mcpServers"].(map[string]any); ok {
+					visit(servers)
+				}
+			}
+		}
+	}
+	var checks []Check
+	sort.Strings(current)
+	sort.Strings(stale)
+	if len(current) > 0 {
+		checks = append(checks, Check{"claude mcp-wrap", OK,
+			fmt.Sprintf("%d server(s) relayed through this binary: %s", len(current), strings.Join(dedupeSorted(current), ", "))})
+	}
+	if len(stale) > 0 {
+		checks = append(checks, Check{"claude mcp-wrap", Warn,
+			"wrapped by a ctx-wire that is not this binary (breaks if that path disappears): " +
+				strings.Join(dedupeSorted(stale), ", ") + "; edit the entry's command back to the server itself (everything after `--`), then `ctx-wire init claude` re-wraps it here"})
+	}
+	return checks
+}
+
+func dedupeSorted(in []string) []string {
+	out := in[:0]
+	for i, s := range in {
+		if i == 0 || s != in[i-1] {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func mcpCheck(label, path string) Check {

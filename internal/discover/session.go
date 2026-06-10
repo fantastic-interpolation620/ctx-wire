@@ -48,12 +48,25 @@ func Sessions(opts Options) ([]SessionStat, error) {
 			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".jsonl") {
 				return nil
 			}
-			if st, ok := sessionStat("claude", path, parseClaudeFile(path, opts.Since), d); ok {
-				// Counted only for sessions that already qualify (coverable
-				// shell commands exist), so adoption semantics and row set stay
-				// unchanged; file-tool-only sessions remain skipped for now.
-				st.FileTools = parseClaudeFileTools(path, opts.Since)
+			st, ok := sessionStat("claude", path, parseClaudeFile(path, opts.Since), d)
+			ft := parseClaudeFileTools(path, opts.Since)
+			switch {
+			case ok:
+				st.FileTools = ft
 				stats = append(stats, st)
+			case ft.Reads+ft.Greps+ft.EditRefusals > 0:
+				// A session with ONLY built-in file-tool traffic is exactly the
+				// gap the capture experiment measures; hiding it would bias the
+				// baseline toward shell-heavy sessions. Shell adoption columns
+				// stay zero (no coverable commands), the file-tool columns carry
+				// the signal.
+				var mt time.Time
+				if info, ierr := d.Info(); ierr == nil {
+					mt = info.ModTime()
+				}
+				stats = append(stats, SessionStat{
+					Agent: "claude", File: filepath.Base(path), ModTime: mt, FileTools: ft,
+				})
 			}
 			return nil
 		})
