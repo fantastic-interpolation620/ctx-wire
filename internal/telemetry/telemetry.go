@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"ctx-wire/internal/agent"
 	"ctx-wire/internal/gain"
 	"ctx-wire/internal/paths"
 )
@@ -105,6 +104,7 @@ type stateFile struct {
 type impactPayload struct {
 	Schema       int                      `json:"schema"`
 	Event        string                   `json:"event"`
+	Version      string                   `json:"version,omitempty"`
 	Commands     int64                    `json:"commands,omitempty"`
 	RawBytes     int64                    `json:"raw_bytes,omitempty"`
 	EmittedBytes int64                    `json:"emitted_bytes,omitempty"`
@@ -115,8 +115,9 @@ type impactPayload struct {
 }
 
 type installPayload struct {
-	Schema int    `json:"schema"`
-	Event  string `json:"event"`
+	Schema  int    `json:"schema"`
+	Event   string `json:"event"`
+	Version string `json:"version,omitempty"`
 	// Agent is the configured agent (claude, codex, ...). Machine requests that
 	// the server increments the aggregate reported-install counter; every
 	// successful `ctx-wire init <agent>` sends it.
@@ -205,13 +206,13 @@ func ReportInstall(agentName string) (Result, error) {
 		return Result{Disabled: true}, nil
 	}
 
-	ag := agent.Normalize(agentName)
+	ag := safeAgentName(agentName)
 	machineFirst := !cfg.InstallReported
 	if ag == "" && !machineFirst {
 		return Result{Noop: true, InstallReported: true}, nil
 	}
 
-	if err := sendPayload(installPayload{Schema: 1, Event: "install", Agent: ag, Machine: true}); err != nil {
+	if err := sendPayload(installPayload{Schema: 1, Event: "install", Version: buildVersion, Agent: ag, Machine: true}); err != nil {
 		return Result{}, err
 	}
 	cfg.InstallReported = true
@@ -255,10 +256,12 @@ func ReportImpact(summary *gain.Summary) (Result, error) {
 	if totalsEmpty(delta) {
 		return Result{Noop: true}, nil
 	}
+	sanitizeTotals(&delta) // belt-and-suspenders: nothing unsafe reaches the wire
 
 	payload := impactPayload{
 		Schema:       1,
 		Event:        "impact",
+		Version:      buildVersion,
 		Commands:     delta.Commands,
 		RawBytes:     delta.RawBytes,
 		EmittedBytes: delta.EmittedBytes,
@@ -310,9 +313,11 @@ func RecordCommand(command, agentName string, rawBytes, emittedBytes int) (Resul
 		return Result{Noop: true}, nil
 	}
 
+	sanitizeTotals(&st.Pending) // belt-and-suspenders: nothing unsafe reaches the wire
 	payload := impactPayload{
 		Schema:       1,
 		Event:        "impact",
+		Version:      buildVersion,
 		Commands:     st.Pending.Commands,
 		RawBytes:     st.Pending.RawBytes,
 		EmittedBytes: st.Pending.EmittedBytes,
@@ -346,7 +351,7 @@ func totalsFromSummary(summary *gain.Summary) Totals {
 		Programs:     map[string]ProgramTotals{},
 	}
 	for _, p := range summary.ByProgram {
-		name := normalizeProgram(p.Program)
+		name := safeProgramName(p.Program)
 		if name == "" {
 			continue
 		}
@@ -359,7 +364,7 @@ func totalsFromSummary(summary *gain.Summary) Totals {
 		}
 	}
 	for _, a := range summary.ByAgent {
-		name := agent.Normalize(a.Agent)
+		name := safeAgentName(a.Agent)
 		if name == "" {
 			continue // unattributed: counted in scalar totals, no agent bucket
 		}
@@ -399,12 +404,12 @@ func totalsFromCommand(command, agentName string, rawBytes, emittedBytes int) To
 		TokensSaved:  approxTokens(int64(saved)),
 		Programs:     map[string]ProgramTotals{},
 	}
-	if program := normalizeProgram(gain.ProgramName(command)); program != "" {
+	if program := safeProgramName(gain.ProgramName(command)); program != "" {
 		t.Programs[program] = bucket
 	}
 	// Attribute to the invoking agent when known. Unattributed commands add to the
 	// scalar totals but no agent bucket, so the site can show coverage honestly.
-	if ag := agent.Normalize(agentName); ag != "" {
+	if ag := safeAgentName(agentName); ag != "" {
 		t.Agents = map[string]ProgramTotals{ag: bucket}
 	}
 	return t
@@ -609,6 +614,12 @@ func readState() (stateFile, error) {
 	default:
 		return stateFile{}, err
 	}
+	// Fold any pre-upgrade private program/agent keys onto the allowlist so a
+	// telemetry-state.json written before this fix cannot leak them on the next
+	// send. New inserts are already allowlisted at the totals sites; this covers
+	// the at-rest state.
+	sanitizeTotals(&st.LastReported)
+	sanitizeTotals(&st.Pending)
 	if st.LastReported.Programs == nil {
 		st.LastReported.Programs = map[string]ProgramTotals{}
 	}

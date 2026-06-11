@@ -17,6 +17,7 @@ import (
 	"ctx-wire/internal/runner"
 	"ctx-wire/internal/selfupdate"
 	"ctx-wire/internal/shim"
+	"ctx-wire/internal/telemetry"
 	"ctx-wire/internal/ui"
 )
 
@@ -43,6 +44,9 @@ func main() {
 		selfupdate.RunBackground(version)
 		os.Exit(0)
 	}
+	// Stamp the version into telemetry payloads (anonymous, opt-out) before any
+	// command can trigger a send, so per-version filter-effectiveness is chartable.
+	telemetry.SetBuildInfo(version)
 	// Load the user config once and apply the exclude list to the shared command
 	// policy (honored by both the hook rewriter and the runner). Best-effort: a
 	// malformed config warns but never blocks a command.
