@@ -44,7 +44,7 @@ func main() {
 		selfupdate.RunBackground(version)
 		os.Exit(0)
 	}
-	// Stamp the version into telemetry payloads (anonymous, opt-out) before any
+	// Stamp the version into telemetry payloads (anonymous, opt-in) before any
 	// command can trigger a send, so per-version filter-effectiveness is chartable.
 	telemetry.SetBuildInfo(version)
 	// Load the user config once and apply the exclude list to the shared command

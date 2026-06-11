@@ -334,10 +334,11 @@ func reportInstallTelemetry(theme ui.Theme, agentName string) {
 		fmt.Printf("%s telemetry install report not sent: %v\n", theme.Warn.Render("Telemetry"), err)
 		return
 	}
-	// Show the telemetry notice only the first time this local config reports.
-	// Repeated `init <agent>` runs still send install events, but stay quiet.
+	// Show the telemetry notice only the first time this local config reports
+	// after the user explicitly enabled telemetry. Repeated `init <agent>` runs
+	// still send install events, but stay quiet.
 	if result.MachineFirst {
-		fmt.Printf("%s anonymous aggregate telemetry enabled (disable: ctx-wire telemetry disable)\n", theme.OK.Render("Telemetry"))
+		fmt.Printf("%s anonymous aggregate telemetry is on (disable: ctx-wire telemetry disable)\n", theme.OK.Render("Telemetry"))
 	}
 }
 

@@ -155,6 +155,14 @@ func ColorEnabled(f *os.File) bool {
 	if os.Getenv("FORCE_COLOR") != "" {
 		return true
 	}
+	return IsTerminal(f)
+}
+
+// IsTerminal reports whether f is an interactive terminal (a character device).
+// Unlike ColorEnabled it ignores NO_COLOR / CTX_WIRE_COLOR, so a human-only
+// prompt (the telemetry consent preview) still reaches a user who has turned
+// color off, while staying suppressed for pipes and agent-captured output.
+func IsTerminal(f *os.File) bool {
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }

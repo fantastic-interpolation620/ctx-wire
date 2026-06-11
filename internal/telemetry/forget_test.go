@@ -33,9 +33,9 @@ func TestForget(t *testing.T) {
 	if _, err := os.Stat(st); !os.IsNotExist(err) {
 		t.Errorf("state should be gone after Forget, stat err = %v", err)
 	}
-	// The crucial guarantee: telemetry stays DISABLED after withdrawal. Because
-	// telemetry is opt-out, deleting the config would silently re-enable it, so
-	// Forget must persist a disabled consent instead.
+	// The crucial guarantee: telemetry stays DISABLED after withdrawal. Forget
+	// persists an explicit disabled consent (not a deleted config), so withdrawal
+	// is recorded as a deliberate choice and sticks.
 	status, err := GetStatus()
 	if err != nil {
 		t.Fatalf("GetStatus: %v", err)
@@ -53,22 +53,28 @@ func TestForget(t *testing.T) {
 	}
 }
 
-// TestForgetBeatsDefaultOptOut is the focused regression for the privacy bug:
-// with no env override, GetStatus reports enabled by default, but after Forget
-// it must report disabled.
-func TestForgetBeatsDefaultOptOut(t *testing.T) {
+// TestForgetUnderOptIn pins the opt-in model: with no env override telemetry is
+// OFF by default and the consent invite shows for an undecided user; Forget then
+// records an explicit withdrawal, so the invite must NOT re-appear.
+func TestForgetUnderOptIn(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(envConfig, filepath.Join(dir, "telemetry.json"))
 	t.Setenv(envState, filepath.Join(dir, "telemetry-state.json"))
-	t.Setenv(envEnabled, "") // no override: exercise the opt-out default
+	t.Setenv(envEnabled, "") // no override: exercise the opt-in default
 
-	if status, err := GetStatus(); err != nil || !status.Enabled {
-		t.Fatalf("precondition: telemetry should be enabled by default (err=%v, enabled=%v)", err, status.Enabled)
+	if status, err := GetStatus(); err != nil || status.Enabled {
+		t.Fatalf("precondition: telemetry must be OFF by default under opt-in (err=%v, enabled=%v)", err, status.Enabled)
+	}
+	if !ShouldPreviewConsent() {
+		t.Fatal("an undecided user should see the consent invite")
 	}
 	if err := Forget(); err != nil {
 		t.Fatalf("Forget: %v", err)
 	}
 	if status, err := GetStatus(); err != nil || status.Enabled {
-		t.Fatalf("after Forget telemetry must be disabled (err=%v, enabled=%v)", err, status.Enabled)
+		t.Fatalf("after Forget telemetry must stay disabled (err=%v, enabled=%v)", err, status.Enabled)
+	}
+	if ShouldPreviewConsent() {
+		t.Fatal("after Forget (an explicit withdrawal) the invite must not re-appear")
 	}
 }

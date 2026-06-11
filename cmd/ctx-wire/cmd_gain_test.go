@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"ctx-wire/internal/ui"
+)
 
 func TestParseTokenCount(t *testing.T) {
 	cases := []struct {
@@ -95,5 +100,15 @@ func TestParseGainOptionsAgent(t *testing.T) {
 	// missing value is an error.
 	if _, _, _, _, err := parseGainOptions([]string{"--agent"}); err == nil {
 		t.Error("expected error for --agent with no name")
+	}
+}
+
+func TestHighlightJSONPlainHasNoANSI(t *testing.T) {
+	out := highlightJSON(ui.Plain(), "{\n  \"program\": \"git\",\n  \"commands\": 128\n}")
+	if strings.Contains(out, "\x1b[") {
+		t.Fatalf("plain JSON render contains ANSI escapes: %q", out)
+	}
+	if !strings.Contains(out, "  \"program\": \"git\"") {
+		t.Fatalf("plain JSON render lost content:\n%s", out)
 	}
 }

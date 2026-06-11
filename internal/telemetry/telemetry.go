@@ -43,6 +43,11 @@ var (
 type Config struct {
 	Enabled         *bool `json:"enabled,omitempty"`
 	InstallReported bool  `json:"install_reported,omitempty"`
+	// PreviewShown latches the one-time consent invite shown on the first
+	// interactive `ctx-wire gain`, so it is shown once and never repeated. The
+	// invite uses a fixed mock payload; the real payload is shown only by the
+	// explicit `ctx-wire telemetry preview` command.
+	PreviewShown bool `json:"preview_shown,omitempty"`
 	// InstalledAgents is the set of agents this config has ever reported
 	// configuring (claude, codex, ...). It is informational only: every
 	// successful `ctx-wire init <agent>` still reports an install event.
@@ -178,11 +183,11 @@ func ClearState() error {
 // so there is nothing to erase server-side; this is the local equivalent of
 // withdrawal plus erasure.
 //
-// Because telemetry is opt-out (enabled when no config says otherwise), Forget
-// must NOT simply delete the config: that would re-enable telemetry on the next
-// report. Instead it erases the state file and persists a config of {enabled:
-// false}, so withdrawal sticks until the user explicitly re-enables (or sets
-// CTX_WIRE_TELEMETRY=1). Missing files are not an error.
+// Telemetry is opt-in (off until enabled), so withdrawal is a deliberate "no":
+// Forget persists {enabled: false} rather than deleting the config. That records
+// an explicit choice, distinct from "never decided" (nil), so the one-time
+// consent invite on `ctx-wire gain` does not re-appear after a withdrawal.
+// Missing files are not an error.
 func Forget() error {
 	if err := ClearState(); err != nil {
 		return err
@@ -555,7 +560,9 @@ func enabled(cfg Config) (bool, bool) {
 	if cfg.Enabled != nil {
 		return *cfg.Enabled, false
 	}
-	return true, false
+	// Opt-in: telemetry stays OFF until the user explicitly enables it (after the
+	// one-time consent invite on `ctx-wire gain`). No choice yet means no data.
+	return false, false
 }
 
 func endpoint() string {

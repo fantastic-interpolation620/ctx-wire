@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +11,9 @@ import (
 	"ctx-wire/internal/config"
 	"ctx-wire/internal/gain"
 	"ctx-wire/internal/telemetry"
+	"ctx-wire/internal/ui"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // cmdGain prints or clears the recorded token-savings summary.
@@ -83,11 +87,120 @@ func cmdGain(args []string) int {
 		fmt.Fprintf(os.Stderr, "ctx-wire gain: %v\n", err)
 		return 1
 	}
+	// One-time consent prompt: ask the human, once, whether to turn telemetry on.
+	// Gated on BOTH stdin and stdout being a terminal, so an agent or a pipe is
+	// never prompted (and never blocked waiting for input).
+	if ui.IsTerminal(os.Stdin) && ui.IsTerminal(os.Stdout) && telemetry.ShouldPreviewConsent() {
+		promptConsent()
+	}
 	fmt.Print(gain.FormatThemed(s, themeForStdout()))
 	if opts.Since.IsZero() {
 		_, _ = telemetry.ReportImpact(s)
 	}
 	return 0
+}
+
+// promptConsent shows a fixed EXAMPLE of the anonymous payload, then asks the
+// human, once, whether to turn telemetry on, and acts on the answer. It records
+// that the prompt was shown either way so it never repeats. Telemetry stays off
+// unless the user answers yes. Only ever reached on an interactive terminal.
+func promptConsent() {
+	theme := themeForStdout()
+	fmt.Printf("%s\n\n", theme.Heading("Help improve ctx-wire's filters?"))
+	fmt.Println("ctx-wire can share an anonymous summary like the example below, so weak filters")
+	fmt.Println("get fixed for everyone. No commands, arguments, paths, output, or repo/host/user")
+	fmt.Println("names, ever, only counts like this:")
+	fmt.Println()
+	fmt.Println(highlightJSON(theme, telemetry.MockPayload()))
+	fmt.Println()
+	fmt.Print("Enable anonymous telemetry? [y/N]: ")
+
+	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	telemetry.MarkPreviewShown() // asked once, whatever the answer
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "y", "yes":
+		if err := telemetry.SetEnabled(true); err != nil {
+			fmt.Printf("\n%s could not enable: %v\n\n", theme.Warn.Render("Telemetry"), err)
+			return
+		}
+		fmt.Printf("\n%s thanks, it's on. Turn it off anytime: %s\n\n",
+			theme.OK.Render("Telemetry"), theme.Command.Render("ctx-wire telemetry disable"))
+	default:
+		fmt.Printf("\n%s staying off. Enable anytime: %s\n\n",
+			theme.Dim.Render("Telemetry"), theme.Command.Render("ctx-wire telemetry enable"))
+	}
+}
+
+// consentOlive is the muted olive-green used for the consent's JSON structure
+// and secondary text, in place of the flat dim gray.
+var consentOlive = lipgloss.NewStyle().Foreground(lipgloss.Color("#8a9a5b"))
+
+// highlightJSON renders pretty-printed JSON with light syntax coloring (keys
+// blue, string values green, numbers cyan, structure in muted olive), each line
+// indented two spaces under the intro. Plain text when color is off.
+func highlightJSON(theme ui.Theme, s string) string {
+	var b strings.Builder
+	for i, line := range strings.Split(s, "\n") {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString("  ")
+		if !theme.Color {
+			b.WriteString(line)
+			continue
+		}
+		b.WriteString(highlightJSONLine(theme, line))
+	}
+	return b.String()
+}
+
+func highlightJSONLine(theme ui.Theme, line string) string {
+	isNumStart := func(c byte) bool { return (c >= '0' && c <= '9') || c == '-' }
+	var b strings.Builder
+	i := 0
+	for i < len(line) {
+		// Structure run (indent, braces, colons, commas) in olive.
+		start := i
+		for i < len(line) && line[i] != '"' && !isNumStart(line[i]) {
+			i++
+		}
+		if i > start {
+			b.WriteString(consentOlive.Render(line[start:i]))
+		}
+		if i >= len(line) {
+			break
+		}
+		if line[i] == '"' {
+			j := i + 1
+			for j < len(line) && line[j] != '"' {
+				if line[j] == '\\' {
+					j++
+				}
+				j++
+			}
+			end := min(j+1, len(line))
+			tok := line[i:end]
+			k := end
+			for k < len(line) && line[k] == ' ' {
+				k++
+			}
+			if k < len(line) && line[k] == ':' {
+				b.WriteString(theme.Path.Render(tok)) // key
+			} else {
+				b.WriteString(theme.Good.Render(tok)) // string value
+			}
+			i = end
+			continue
+		}
+		// number
+		j := i
+		for j < len(line) && (isNumStart(line[j]) || line[j] == '.' || line[j] == 'e' || line[j] == '+') {
+			j++
+		}
+		b.WriteString(theme.Number.Render(line[i:j]))
+		i = j
+	}
+	return b.String()
 }
 
 // quotaFlags carries the CLI overrides for the quota view. A negative value

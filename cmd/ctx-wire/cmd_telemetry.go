@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"ctx-wire/internal/gain"
 	"ctx-wire/internal/telemetry"
 )
 
@@ -21,17 +22,25 @@ func cmdTelemetry(args []string) int {
 			case isVerboseFlag(a):
 				verbose = true
 			default:
-				usageHint(os.Stderr, "ctx-wire telemetry [status|enable|disable|forget]", "telemetry")
+				usageHint(os.Stderr, "ctx-wire telemetry [status|preview|enable|disable|forget]", "telemetry")
 				return 2
 			}
 		}
 		return cmdTelemetryStatus(verbose)
 	}
 	if len(args) != 1 {
-		usageHint(os.Stderr, "ctx-wire telemetry [status|enable|disable|forget]", "telemetry")
+		usageHint(os.Stderr, "ctx-wire telemetry [status|preview|enable|disable|forget]", "telemetry")
 		return 2
 	}
 	switch args[0] {
+	case "preview":
+		s, err := gain.Summarize()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ctx-wire telemetry preview: %v\n", err)
+			return 1
+		}
+		fmt.Println(telemetry.PreviewPayload(s))
+		return 0
 	case "enable":
 		if err := telemetry.SetEnabled(true); err != nil {
 			fmt.Fprintf(os.Stderr, "ctx-wire telemetry enable: %v\n", err)
@@ -55,7 +64,7 @@ func cmdTelemetry(args []string) int {
 		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "ctx-wire telemetry: unsupported command %q\n", args[0])
-		usageHint(os.Stderr, "ctx-wire telemetry [status|enable|disable|forget]", "telemetry")
+		usageHint(os.Stderr, "ctx-wire telemetry [status|preview|enable|disable|forget]", "telemetry")
 		return 2
 	}
 }
@@ -107,10 +116,11 @@ func cmdTelemetryStatus(verbose bool) int {
 
 func usageTelemetry(w *os.File) {
 	printHelp(w, helpDoc{
-		usage:   []string{"ctx-wire telemetry [status|enable|disable|forget]"},
-		summary: "Show or change anonymous, aggregate, token-only telemetry (opt-out by default).",
+		usage:   []string{"ctx-wire telemetry [status|preview|enable|disable|forget]"},
+		summary: "Show or change anonymous, aggregate, token-only telemetry (opt-in: off until enabled).",
 		commands: [][2]string{
 			{"status [--verbose]", "show whether telemetry is on (--verbose adds endpoint + file paths)"},
+			{"preview", "print the exact anonymous payload that would be shared"},
 			{"enable", "turn telemetry on"},
 			{"disable", "turn telemetry off"},
 			{"forget", "withdraw consent and erase local data (stays off until re-enabled)"},

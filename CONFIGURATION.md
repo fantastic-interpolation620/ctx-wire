@@ -88,8 +88,12 @@ filter change improved fresh dogfood runs.
 
 ## Telemetry
 
-Anonymous aggregate telemetry is enabled by default. It sends only counters used
-for the public impact page:
+Anonymous aggregate telemetry is opt-in and stays off until you enable it. The
+first interactive `ctx-wire gain` for an undecided user shows a one-time invite
+with a fixed example payload; it sends nothing. To inspect your exact local
+payload before enabling, run `ctx-wire telemetry preview`.
+
+When enabled, telemetry sends only counters used for the public impact page:
 
 - reported installs (successful `ctx-wire init <agent>` runs)
 - total commands, raw bytes, emitted bytes, bytes saved, and estimated tokens
@@ -113,14 +117,15 @@ Controls:
 
 ```sh
 ctx-wire telemetry status
-ctx-wire telemetry disable
+ctx-wire telemetry preview
 ctx-wire telemetry enable
+ctx-wire telemetry disable
 ctx-wire telemetry forget   # withdraw consent + erase local data (stays disabled)
 ```
 
 `forget` erases the pending/last-reported counters and records a disabled
-consent so it stays off: because telemetry is opt-out, it does not just delete
-the config (that would re-enable it). Re-enable later with `telemetry enable`.
+consent so it stays off and the invite does not reappear. Re-enable later with
+`telemetry enable`.
 
 Set `CTX_WIRE_TELEMETRY=0` to disable telemetry for one process. Set
 `CTX_WIRE_TELEMETRY_URL` to override the endpoint for tests or local Worker

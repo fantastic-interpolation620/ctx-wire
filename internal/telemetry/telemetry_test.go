@@ -118,6 +118,36 @@ func TestReportInstallMarksOnlyAfterSuccess(t *testing.T) {
 	}
 }
 
+func TestReportInstallDisabledByDefault(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(envEnabled, "")
+	t.Setenv(envConfig, filepath.Join(dir, "telemetry.json"))
+	t.Setenv(envState, filepath.Join(dir, "state.json"))
+	var count int
+	restoreSender(t, func(payload any) error {
+		count++
+		return nil
+	})
+
+	res, err := ReportInstall("claude")
+	if err != nil {
+		t.Fatalf("ReportInstall: %v", err)
+	}
+	if !res.Disabled {
+		t.Fatalf("ReportInstall default = %#v, want Disabled", res)
+	}
+	if count != 0 {
+		t.Fatalf("install reports sent by default = %d, want 0", count)
+	}
+	status, err := GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	if status.InstallReported {
+		t.Fatal("disabled install report must not mark InstallReported")
+	}
+}
+
 // TestReportInstallPerAgent verifies every successful agent init reports an
 // install event, including repeats for the same agent. The local config only
 // controls the one-time telemetry notice and remembers which agents were seen.
