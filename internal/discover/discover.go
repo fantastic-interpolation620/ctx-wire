@@ -358,6 +358,11 @@ type FileToolStat struct {
 	Reads        int
 	Greps        int
 	EditRefusals int
+	// Captures is how many Read/Grep tool calls the file-tools capture redirected
+	// to a filtered shell command (a deny carrying captureMarker). It is a count
+	// of redirects, not a token estimate: the tokens actually saved show up in
+	// `ctx-wire gain` as the substituted nl/rg runs.
+	Captures int
 }
 
 // claudeToolLine is the lean decode for file-tool counting. tool_result
@@ -378,6 +383,11 @@ type claudeToolLine struct {
 // editRefusalMarker is the harness's read-before-edit refusal. Substring, not
 // equality: the surrounding wording varies across Claude Code versions.
 const editRefusalMarker = "has not been read yet"
+
+// captureMarker is the lead-in of the file-tools capture deny reason (kept in
+// sync with internal/hook/claude_filetools.go). A tool_result carrying it is a
+// Read/Grep the capture redirected to a filtered shell command.
+const captureMarker = "Token savings: run "
 
 // parseClaudeFileTools counts Read/Grep tool uses (assistant lines) and
 // read-before-edit refusals (user-line tool results) in one transcript. It is
@@ -425,6 +435,8 @@ func countClaudeToolLine(st *FileToolStat, line string, since time.Time) {
 			st.Greps++
 		case l.Type == "user" && c.Type == "tool_result" && strings.Contains(string(c.Content), editRefusalMarker):
 			st.EditRefusals++
+		case l.Type == "user" && c.Type == "tool_result" && strings.Contains(string(c.Content), captureMarker):
+			st.Captures++
 		}
 	}
 }

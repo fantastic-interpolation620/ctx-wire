@@ -146,6 +146,6 @@ func FormatSessionsThemed(stats []SessionStat, theme ui.Theme) string {
 		return b.String()
 	}
 	b.WriteString(sessionTable(stats, theme))
-	b.WriteString("\n" + theme.Dim.Render("Reads/Greps = built-in file-tool uses (these bypass ctx-wire) · EditRef = Edit refused, file not Read first") + "\n")
+	b.WriteString("\n" + theme.Dim.Render("Reads/Greps = built-in file-tool uses (bypass ctx-wire) · Captured = redirected to a filtered shell read (capture experiment) · EditRef = Edit refused, file not Read first") + "\n")
 	return b.String()
 }

@@ -361,7 +361,7 @@ func hooksSection(opts Options) Section {
 	if cfg, cerr := config.Load(); cerr == nil {
 		if cfg.Hooks.CaptureFileTools {
 			sec.Checks = append(sec.Checks, Check{"claude file-tools capture", OK,
-				"experiment on: exact-mappable Read/Grep calls redirect to filtered shell commands"})
+				"experiment on: Read/Grep redirect to filtered shell commands; see the Captured column in `ctx-wire session`"})
 		} else {
 			sec.Checks = append(sec.Checks, Check{"claude file-tools capture", Off,
 				"off; opt in with `ctx-wire init claude --capture-files`"})

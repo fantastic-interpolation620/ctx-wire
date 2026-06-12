@@ -63,6 +63,8 @@ func TestSessionsCountsFileTools(t *testing.T) {
 		`{"type":"user","timestamp":"2026-06-04T10:04:00Z","message":{"content":[{"type":"tool_result","content":[{"type":"text","text":"Error: file has not been read yet."}]}]}}`,
 		// A normal tool_result must NOT count.
 		`{"type":"user","timestamp":"2026-06-04T10:05:00Z","message":{"content":[{"type":"tool_result","content":"ok"}]}}`,
+		// A file-tools capture deny: a Read redirected to a filtered shell read.
+		`{"type":"user","timestamp":"2026-06-04T10:06:00Z","message":{"content":[{"type":"tool_result","content":"Token savings: run nl -ba /work/proj/big.go in Bash instead (the output is filtered, capped, and secrets-scrubbed by ctx-wire; the built-in tool bypasses that)."}]}}`,
 	}
 	var b []byte
 	for _, l := range lines {
@@ -81,8 +83,8 @@ func TestSessionsCountsFileTools(t *testing.T) {
 		t.Fatalf("want 1 session, got %d", len(stats))
 	}
 	ft := stats[0].FileTools
-	if ft.Reads != 2 || ft.Greps != 1 || ft.EditRefusals != 2 {
-		t.Errorf("FileTools = %+v, want Reads=2 Greps=1 EditRefusals=2", ft)
+	if ft.Reads != 2 || ft.Greps != 1 || ft.EditRefusals != 2 || ft.Captures != 1 {
+		t.Errorf("FileTools = %+v, want Reads=2 Greps=1 EditRefusals=2 Captures=1", ft)
 	}
 	if stats[0].Coverable != 1 || stats[0].Covered != 0 {
 		t.Errorf("shell adoption semantics moved: %+v", stats[0])
