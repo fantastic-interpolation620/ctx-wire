@@ -287,8 +287,12 @@ func hookOrPluginConfigured(opts Options) bool {
 		c, e := fileContains(p, needle)
 		return e == nil && c
 	}
-	if p, err := install.ClaudeSettingsPath(); err == nil && has(p, "ctx-wire hook claude") {
-		return true
+	if dirs, err := install.ClaudeConfigDirs(); err == nil {
+		for _, dir := range dirs {
+			if has(filepath.Join(dir, "settings.json"), "ctx-wire hook claude") {
+				return true
+			}
+		}
 	}
 	if p, err := install.CursorHooksPath(); err == nil && has(p, "ctx-wire hook cursor") {
 		return true
@@ -340,18 +344,27 @@ func missingSystemPathDirs() []string {
 func hooksSection(opts Options) Section {
 	sec := Section{Title: "hooks"}
 
-	if p, err := install.ClaudeSettingsPath(); err == nil {
-		sec.Checks = append(sec.Checks, hookCheck("claude", p, "ctx-wire hook claude"))
-		// The file-tools capture experiment (config-present only; runtime proof
-		// is Read/Grep counts falling in `ctx-wire session`).
-		if cfg, cerr := config.Load(); cerr == nil {
-			if cfg.Hooks.CaptureFileTools {
-				sec.Checks = append(sec.Checks, Check{"claude file-tools capture", OK,
-					"experiment on: exact-mappable Read/Grep calls redirect to filtered shell commands"})
-			} else {
-				sec.Checks = append(sec.Checks, Check{"claude file-tools capture", Off,
-					"off; opt in with `ctx-wire init claude --capture-files`"})
-			}
+	// Emit one hook check per detected Claude config dir. A real config that is
+	// not hooked is flagged as Warn because commands from that Claude instance
+	// escape ctx-wire entirely; Off means the dir does not exist yet.
+	claudeDirs, _ := install.ClaudeConfigDirs()
+	for _, dir := range claudeDirs {
+		p := filepath.Join(dir, "settings.json")
+		label := "claude"
+		if len(claudeDirs) > 1 {
+			label = "claude config " + display(dir)
+		}
+		sec.Checks = append(sec.Checks, hookCheckMulti(label, p, "ctx-wire hook claude"))
+	}
+	// The file-tools capture experiment (config-present only; runtime proof
+	// is Read/Grep counts falling in `ctx-wire session`).
+	if cfg, cerr := config.Load(); cerr == nil {
+		if cfg.Hooks.CaptureFileTools {
+			sec.Checks = append(sec.Checks, Check{"claude file-tools capture", OK,
+				"experiment on: exact-mappable Read/Grep calls redirect to filtered shell commands"})
+		} else {
+			sec.Checks = append(sec.Checks, Check{"claude file-tools capture", Off,
+				"off; opt in with `ctx-wire init claude --capture-files`"})
 		}
 	}
 	if p, err := install.CursorHooksPath(); err == nil {
@@ -440,6 +453,24 @@ func hookCheck(agent, path, needle string) Check {
 		return Check{agent, OK, "hook present in " + display(path)}
 	default:
 		return Check{agent, Off, notConfigured}
+	}
+}
+
+// hookCheckMulti is like hookCheck but treats a real existing config dir
+// without a hook as Warn rather than Off, because that instance of Claude
+// gets no ctx-wire coverage and the user may not realize it.
+// A missing settings file (config dir not yet created) stays Off.
+func hookCheckMulti(label, path, needle string) Check {
+	contains, err := fileContains(path, needle)
+	switch {
+	case err == nil && contains:
+		return Check{label, OK, "hook present in " + display(path)}
+	case err == nil && !contains:
+		// File exists but hook is absent: real config, not wired.
+		return Check{label, Warn, "hook not installed; run `ctx-wire init claude` to wire this config dir (" + display(path) + ")"}
+	default:
+		// File does not exist (os.ErrNotExist) or unreadable: treat as Off (not yet set up).
+		return Check{label, Off, "not configured (run `ctx-wire init claude`); without it this config dir gets no coverage (" + display(path) + ")"}
 	}
 }
 

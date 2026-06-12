@@ -214,3 +214,98 @@ func TestRecentHiddenByDefault(t *testing.T) {
 		t.Errorf("--recent should include recent command:\n%s", Format(r))
 	}
 }
+
+// TestDoctorMultiConfigAllHooked verifies that when multiple Claude config dirs
+// are present and all are hooked, the report shows OK for each dir.
+func TestDoctorMultiConfigAllHooked(t *testing.T) {
+	home, wd := isolate(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+
+	settings := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"ctx-wire hook claude"}]}]}}`
+
+	// Primary dir: ~/.claude
+	primaryDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(primaryDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(primaryDir, "settings.json"), []byte(settings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Secondary dir: ~/.claude-main (real config, must have projects/).
+	secondaryDir := filepath.Join(home, ".claude-main")
+	if err := os.MkdirAll(filepath.Join(secondaryDir, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secondaryDir, "settings.json"), []byte(settings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := Run(Options{Version: "test", Workdir: wd})
+
+	// Both config dirs must show OK.
+	for _, sec := range r.Sections {
+		if sec.Title != "hooks" {
+			continue
+		}
+		for _, c := range sec.Checks {
+			if strings.Contains(c.Name, "claude config") {
+				if c.Status != OK {
+					t.Errorf("multi-config check %q = %v %q, want OK", c.Name, c.Status, c.Detail)
+				}
+			}
+		}
+	}
+	if !r.Healthy() {
+		t.Errorf("all configs hooked must be healthy:\n%s", Format(r))
+	}
+}
+
+// TestDoctorMultiConfigOneUnhooked verifies that when one config dir has no
+// hook, that check is Warn and the report is still healthy (Warn, not Fail).
+func TestDoctorMultiConfigOneUnhooked(t *testing.T) {
+	home, wd := isolate(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+
+	hookedSettings := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"ctx-wire hook claude"}]}]}}`
+	unhooked := `{}`
+
+	// Primary: hooked.
+	primaryDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(primaryDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(primaryDir, "settings.json"), []byte(hookedSettings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Secondary: settings.json present but NOT hooked.
+	secondaryDir := filepath.Join(home, ".claude-ship")
+	if err := os.MkdirAll(filepath.Join(secondaryDir, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(secondaryDir, "settings.json"), []byte(unhooked), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := Run(Options{Version: "test", Workdir: wd})
+
+	warnFound := false
+	for _, sec := range r.Sections {
+		if sec.Title != "hooks" {
+			continue
+		}
+		for _, c := range sec.Checks {
+			if strings.Contains(c.Name, "claude config") && c.Status == Warn {
+				warnFound = true
+			}
+		}
+	}
+	if !warnFound {
+		t.Errorf("expected a Warn for the unhooked config dir:\n%s", Format(r))
+	}
+	// Warn does not make doctor unhealthy.
+	if !r.Healthy() {
+		t.Errorf("unhooked config dir is a warning, not a failure; doctor should be healthy:\n%s", Format(r))
+	}
+}

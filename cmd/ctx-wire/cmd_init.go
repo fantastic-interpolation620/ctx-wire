@@ -67,17 +67,23 @@ func cmdInit(args []string) int {
 		return cmdInitGemini()
 	}
 
+	// claude: wire every detected config dir and return early so the single-path
+	// tail below does not run for claude.
+	if agent == "claude" {
+		theme := themeForStdout()
+		if code := initClaude(theme, noMCP, captureFiles, noCaptureFiles); code != 0 {
+			return code
+		}
+		if code := installSelfAndShims(theme, "claude"); code != 0 {
+			return code
+		}
+		return 0
+	}
+
 	var path string
 	var changed bool
 	var err error
 	switch agent {
-	case "claude":
-		if path, err = install.ClaudeSettingsPath(); err == nil {
-			changed, err = install.InstallClaude(path)
-		}
-		if err == nil {
-			installInstructions(install.ClaudeMemoryPath, install.InstallClaudeMemory)
-		}
 	case "cursor":
 		if path, err = install.CursorHooksPath(); err == nil {
 			changed, err = install.InstallCursor(path)
@@ -151,13 +157,95 @@ func cmdInit(args []string) int {
 	if code := installSelfAndShims(theme, canonicalInitAgent(agent)); code != 0 {
 		return code
 	}
-	if agent == "claude" && !noMCP {
-		initAutoWrapMCP(theme)
+	return 0
+}
+
+// initClaude wires every detected Claude config directory. For each dir it
+// installs the Bash hook (settings.json), the CLAUDE.md instructions, the
+// per-config MCP auto-wrap, and (when requested) the file-tools capture
+// experiment. installSelfAndShims runs separately (once, global). Best-effort
+// per dir, never silent.
+func initClaude(theme ui.Theme, noMCP, captureFiles, noCaptureFiles bool) int {
+	dirs, err := install.ClaudeConfigDirs()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ctx-wire init: cannot detect claude config dirs: %v\n", err)
+		return 1
 	}
-	if agent == "claude" && (captureFiles || noCaptureFiles) {
-		initCaptureFileTools(theme, path, captureFiles && !noCaptureFiles)
+	for _, dir := range dirs {
+		settingsPath := filepath.Join(dir, "settings.json")
+		memPath := filepath.Join(dir, "CLAUDE.md")
+
+		// Bash hook.
+		changed, herr := install.InstallClaude(settingsPath)
+		if herr != nil {
+			fmt.Fprintf(os.Stderr, "ctx-wire init: %s hook: %v\n", dir, herr)
+			continue // best-effort: skip the rest for this dir on error
+		}
+		if changed {
+			fmt.Printf("%s ctx-wire in %s\n", theme.OK.Render("Configured"), theme.Path.Render(settingsPath))
+		} else {
+			fmt.Printf("%s ctx-wire already configured in %s\n", theme.OK.Render("OK"), theme.Path.Render(settingsPath))
+		}
+
+		// CLAUDE.md memory.
+		memChanged, merr := install.InstallClaudeMemory(memPath)
+		if merr != nil {
+			fmt.Fprintf(os.Stderr, "ctx-wire init: %s memory: %v\n", dir, merr)
+		} else if memChanged {
+			fmt.Printf("%s ctx-wire instructions in %s\n", theme.OK.Render("Configured"), theme.Path.Render(memPath))
+		} else {
+			fmt.Printf("%s ctx-wire instructions already in %s\n", theme.OK.Render("OK"), theme.Path.Render(memPath))
+		}
+
+		// MCP auto-wrap for this config dir's MCP config.
+		if !noMCP {
+			initAutoWrapMCPForDir(theme, dir)
+		}
+
+		// File-tools capture experiment.
+		if captureFiles || noCaptureFiles {
+			initCaptureFileTools(theme, settingsPath, captureFiles && !noCaptureFiles)
+		}
 	}
 	return 0
+}
+
+// claudeMCPConfigPath returns the .claude.json that holds MCP server entries for
+// a Claude config dir. The location differs by dir, verified on disk:
+//   - default ~/.claude: the real config is the SIBLING ~/.claude.json (its
+//     in-dir ~/.claude/.claude.json is an empty stub), so resolve it via
+//     defaultMCPConfigPath().
+//   - a custom CLAUDE_CONFIG_DIR (e.g. ~/.claude-main): the file lives INSIDE
+//     the dir, <dir>/.claude.json.
+//
+// A naive `configDir + ".json"` wraps the empty in-dir stub for the default and
+// a non-existent sibling for custom dirs, missing every real custom config.
+func claudeMCPConfigPath(configDir string) string {
+	if home, err := os.UserHomeDir(); err == nil &&
+		filepath.Clean(configDir) == filepath.Join(home, ".claude") {
+		return defaultMCPConfigPath()
+	}
+	return filepath.Join(configDir, ".claude.json")
+}
+
+// initAutoWrapMCPForDir turns on snapshot compression for known snapshot-heavy
+// MCP servers in the given config dir's MCP config. It is the per-config-dir
+// variant of the old initAutoWrapMCP. Best-effort, never fails init.
+func initAutoWrapMCPForDir(theme ui.Theme, configDir string) {
+	mcpCfg := claudeMCPConfigPath(configDir)
+	wrapped, err := autoWrapSnapshotMCP(mcpCfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ctx-wire init: mcp auto-wrap for %s skipped: %v\n", configDir, err)
+		return
+	}
+	if len(wrapped) == 0 {
+		return
+	}
+	for _, name := range wrapped {
+		fmt.Printf("%s MCP server %q now relays through `ctx-wire mcp-wrap --compress` (browser snapshots reduced, raw spooled locally)\n",
+			theme.OK.Render("Configured"), name)
+	}
+	fmt.Printf("   %s\n", theme.Dim.Render("restart Claude to apply · revert anytime: ctx-wire mcp-wrap uninstall <server> (or skip with init --no-mcp)"))
 }
 
 // initCaptureFileTools toggles the file-tools capture experiment: the

@@ -10,10 +10,91 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // claudeHookCommand is the hook entry ctx-wire installs.
 const claudeHookCommand = "ctx-wire hook claude"
+
+// ClaudeConfigDirs returns every Claude config directory that should be wired.
+// The result is deduplicated by filepath.Clean and never empty (at minimum the
+// default ~/.claude is returned, even if it does not exist yet).
+//
+// Inclusion rules:
+//   - CLAUDE_CONFIG_DIR (if set) is always included.
+//   - ~/.claude is always included (a fresh default may lack projects/).
+//   - Sibling dirs matching ~/.claude* are included only when they look like a
+//     real used config: they must have BOTH a settings.json file AND a
+//     projects/ subdirectory.
+//
+// Order: env dir, then ~/.claude, then sorted siblings.
+func ClaudeConfigDirs() ([]string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	var dirs []string
+	seen := map[string]bool{}
+
+	add := func(d string) {
+		d = filepath.Clean(d)
+		if d == "" || d == "." || seen[d] {
+			return
+		}
+		seen[d] = true
+		dirs = append(dirs, d)
+	}
+
+	// 1. CLAUDE_CONFIG_DIR: always include when set.
+	if env := os.Getenv("CLAUDE_CONFIG_DIR"); env != "" {
+		add(env)
+	}
+
+	// 2. ~/.claude: always include.
+	add(filepath.Join(home, ".claude"))
+
+	// 3. Siblings ~/.claude*: only real configs (settings.json + projects/).
+	entries, err := os.ReadDir(home)
+	if err != nil {
+		// Cannot scan home: still return what we have.
+		return dirs, nil
+	}
+	var siblings []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if len(name) <= len(".claude") || name[:len(".claude")] != ".claude" {
+			continue
+		}
+		// Must have the ".claude" prefix plus at least one more character.
+		d := filepath.Join(home, name)
+		if !isClaudeConfigDir(d) {
+			continue
+		}
+		siblings = append(siblings, d)
+	}
+	sort.Strings(siblings)
+	for _, d := range siblings {
+		add(d)
+	}
+	return dirs, nil
+}
+
+// isClaudeConfigDir reports whether dir looks like a real Claude config directory:
+// it must have both a settings.json file and a projects/ subdirectory.
+func isClaudeConfigDir(dir string) bool {
+	st, err := os.Stat(filepath.Join(dir, "settings.json"))
+	if err != nil || st.IsDir() {
+		return false
+	}
+	di, err := os.Stat(filepath.Join(dir, "projects"))
+	if err != nil || !di.IsDir() {
+		return false
+	}
+	return true
+}
 
 // ClaudeSettingsPath returns the settings.json path for Claude Code, honoring
 // CLAUDE_CONFIG_DIR and falling back to ~/.claude/settings.json.

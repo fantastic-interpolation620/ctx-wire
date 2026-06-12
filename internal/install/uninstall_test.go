@@ -280,6 +280,145 @@ func TestUninstallAgentRemovesClaudeFileToolsMatcher(t *testing.T) {
 	assertNoCtxWireAndKeeps(t, path, "other-edit")
 }
 
+// TestUninstallIntegrationsMultiConfig verifies that a full uninstall removes
+// ctx-wire hooks from ALL detected Claude config dirs, not just the primary one.
+// It also proves idempotence: the second uninstall is a no-op (no error).
+func TestUninstallIntegrationsMultiConfig(t *testing.T) {
+	home := t.TempDir()
+	workdir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+
+	// Primary dir: ~/.claude (no projects/ yet; always included).
+	primarySettings := filepath.Join(home, ".claude", "settings.json")
+	writeFile(t, primarySettings, `{}`)
+
+	// Secondary dir: ~/.claude-main (real config: has both markers).
+	secondaryDir := filepath.Join(home, ".claude-main")
+	if err := os.MkdirAll(filepath.Join(secondaryDir, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	secondarySettings := filepath.Join(secondaryDir, "settings.json")
+	writeFile(t, secondarySettings, `{"model":"sonnet","hooks":{"PreToolUse":[{"matcher":"Read","hooks":[{"type":"command","command":"other-main"}]}]}}`)
+
+	// Excluded dir: ~/.claude-mem has settings.json but no projects/: NOT a real config.
+	excludedDir := filepath.Join(home, ".claude-mem")
+	if err := os.MkdirAll(excludedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	excludedSettings := filepath.Join(excludedDir, "settings.json")
+	writeFile(t, excludedSettings, `{}`)
+
+	// Wire all detected dirs.
+	dirs, err := ClaudeConfigDirs()
+	if err != nil {
+		t.Fatalf("ClaudeConfigDirs: %v", err)
+	}
+	if len(dirs) < 2 {
+		t.Fatalf("expected at least 2 dirs (primary + secondary), got %v", dirs)
+	}
+	for _, dir := range dirs {
+		sp := filepath.Join(dir, "settings.json")
+		if _, err := InstallClaude(sp); err != nil {
+			t.Fatalf("InstallClaude %s: %v", sp, err)
+		}
+	}
+
+	// Sanity: hook is present in both real dirs.
+	if !hookPresent(t, primarySettings) {
+		t.Error("setup: hook not present in primary settings")
+	}
+	if !hookPresent(t, secondarySettings) {
+		t.Error("setup: hook not present in secondary settings")
+	}
+
+	// Full uninstall.
+	report, err := UninstallIntegrations(workdir)
+	if err != nil {
+		t.Fatalf("UninstallIntegrations: %v", err)
+	}
+	if len(report.Removed) == 0 {
+		t.Fatal("expected at least one removed entry")
+	}
+
+	// Both real dirs must be clean.
+	// primarySettings may be absent (empty config file gets deleted).
+	if data, rerr := os.ReadFile(primarySettings); rerr == nil {
+		if strings.Contains(string(data), "ctx-wire") {
+			t.Errorf("primary settings still contains ctx-wire:\n%s", data)
+		}
+	}
+	if data, rerr := os.ReadFile(secondarySettings); rerr == nil {
+		if strings.Contains(string(data), "ctx-wire") {
+			t.Errorf("secondary settings still contains ctx-wire:\n%s", data)
+		}
+		if !strings.Contains(string(data), "other-main") {
+			t.Error("secondary settings lost unrelated content")
+		}
+	}
+
+	// Excluded dir must not have been touched by ctx-wire (we never installed there).
+	if hookPresent(t, excludedSettings) {
+		t.Error("excluded dir settings should not have been wired")
+	}
+
+	// Idempotent: second uninstall is a no-op, not an error.
+	report2, err := UninstallIntegrations(workdir)
+	if err != nil {
+		t.Fatalf("second UninstallIntegrations: %v", err)
+	}
+	_ = report2
+}
+
+// TestUninstallAgentClaudeMultiConfig verifies that `ctx-wire uninstall claude`
+// removes hooks from EVERY detected config dir.
+func TestUninstallAgentClaudeMultiConfig(t *testing.T) {
+	home := t.TempDir()
+	workdir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+
+	// Two real config dirs.
+	primarySettings := filepath.Join(home, ".claude", "settings.json")
+	writeFile(t, primarySettings, `{}`)
+	secondaryDir := filepath.Join(home, ".claude-ship")
+	if err := os.MkdirAll(filepath.Join(secondaryDir, "projects"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	secondarySettings := filepath.Join(secondaryDir, "settings.json")
+	writeFile(t, secondarySettings, `{}`)
+
+	dirs, err := ClaudeConfigDirs()
+	if err != nil {
+		t.Fatalf("ClaudeConfigDirs: %v", err)
+	}
+	for _, dir := range dirs {
+		sp := filepath.Join(dir, "settings.json")
+		if _, err := InstallClaude(sp); err != nil {
+			t.Fatalf("InstallClaude %s: %v", sp, err)
+		}
+	}
+
+	report, err := UninstallAgent(workdir, "claude")
+	if err != nil {
+		t.Fatalf("UninstallAgent claude: %v", err)
+	}
+	if len(report.Removed) == 0 {
+		t.Fatal("expected at least one removed entry from multi-config uninstall")
+	}
+
+	// Both dirs must be clean.
+	for _, sp := range []string{primarySettings, secondarySettings} {
+		data, rerr := os.ReadFile(sp)
+		if rerr != nil {
+			continue // empty file was removed: fine
+		}
+		if strings.Contains(string(data), "ctx-wire") {
+			t.Errorf("%s still contains ctx-wire after uninstall:\n%s", sp, data)
+		}
+	}
+}
+
 func writeFile(t *testing.T, path, data string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

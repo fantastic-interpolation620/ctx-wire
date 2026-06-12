@@ -25,11 +25,16 @@ type IntegrationUninstallReport struct {
 func UninstallIntegrations(workdir string) (IntegrationUninstallReport, error) {
 	var report IntegrationUninstallReport
 
-	if path, err := ClaudeSettingsPath(); err == nil {
-		if changed, err := UninstallClaude(path); err != nil {
-			return report, err
-		} else if changed {
-			report.Removed = append(report.Removed, "claude")
+	if dirs, err := ClaudeConfigDirs(); err == nil {
+		for _, dir := range dirs {
+			path := filepath.Join(dir, "settings.json")
+			changed, cerr := UninstallClaude(path)
+			if cerr != nil {
+				return report, cerr
+			}
+			if changed {
+				report.Removed = append(report.Removed, "claude:"+dir)
+			}
 		}
 	}
 	if path, err := CursorHooksPath(); err == nil {
@@ -90,13 +95,20 @@ func UninstallIntegrations(workdir string) (IntegrationUninstallReport, error) {
 		{"kilocode rules", KilocodeRulesPath(workdir)},
 		{"antigravity rules", AntigravityRulesPath(workdir)},
 	}
-	// Home-based memory files (claude/codex/gemini) carry the instruction block
-	// too; add them best-effort.
+	// Claude memory files: one per config dir.
+	if dirs, err := ClaudeConfigDirs(); err == nil {
+		for _, dir := range dirs {
+			p := filepath.Join(dir, "CLAUDE.md")
+			ruleTargets = append(ruleTargets, struct {
+				label string
+				path  string
+			}{"claude instructions:" + dir, p})
+		}
+	}
 	for _, get := range []struct {
 		label string
 		fn    func() (string, error)
 	}{
-		{"claude instructions", ClaudeMemoryPath},
 		{"codex instructions", CodexAgentsPath},
 		{"gemini instructions", GeminiMemoryPath},
 	} {
@@ -200,15 +212,22 @@ func UninstallAgent(workdir, name string) (IntegrationUninstallReport, error) {
 		// the Bash hook and the file-tools Read|Grep entry alike (both carry
 		// claudeHookCommand). TestUninstallAgentRemovesClaudeFileToolsMatcher guards
 		// that this stays true.
-		if path, err := ClaudeSettingsPath(); err == nil {
-			if changed, err := UninstallClaude(path); err != nil {
-				return report, err
-			} else if changed {
-				report.Removed = append(report.Removed, "claude")
+		dirs, derr := ClaudeConfigDirs()
+		if derr == nil {
+			for _, dir := range dirs {
+				path := filepath.Join(dir, "settings.json")
+				changed, cerr := UninstallClaude(path)
+				if cerr != nil {
+					return report, cerr
+				}
+				if changed {
+					report.Removed = append(report.Removed, "claude:"+dir)
+				}
+				memPath := filepath.Join(dir, "CLAUDE.md")
+				if err := report.removeInstr("claude instructions:"+dir, memPath); err != nil {
+					return report, err
+				}
 			}
-		}
-		if err := instr("claude instructions", ClaudeMemoryPath); err != nil {
-			return report, err
 		}
 	case "codex":
 		if path, err := CodexHooksPath(); err == nil {
