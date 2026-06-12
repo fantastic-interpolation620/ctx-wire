@@ -18,7 +18,7 @@ commands. For the config file and environment variables see
 | `ctx-wire init <agent> [--no-mcp]` | Install the binary into `~/.local/bin` and wire an agent (claude, cursor, codex, gemini, cline, windsurf, kilocode, antigravity, opencode, pi, hermes, copilot, vscode, visualstudio). Adds PATH shims only for steering-only agents; hook/plugin-capable agents are covered by their hook/plugin. `init claude` also relays known snapshot-heavy MCP servers (chrome-devtools, Playwright) through `mcp-wrap --compress`, printing each change; skip with `--no-mcp`, revert per server with `mcp-wrap uninstall`, and `ctx-wire uninstall` reverts all wraps. `--capture-files` / `--no-capture-files` toggle the opt-in file-tools capture experiment (see CONFIGURATION.md) |
 | `ctx-wire shims [status\|install\|uninstall]` | Manage the optional default PATH shims: inspect them, opt in on a hook/plugin-capable agent, or remove them if they slow shell startup. `uninstall` removes only ctx-wire-managed shim files |
 | `ctx-wire update [--check]` | Upgrade to the latest release (checksum-verified, atomic, with rollback); `--check` only reports |
-| `ctx-wire uninstall` | Remove the ctx-wire binary, managed shims, and only ctx-wire hook/config entries |
+| `ctx-wire uninstall [<agent>]` | With no argument, removes all ctx-wire wiring (binary, managed shims, every agent's hook/config entries). With an `<agent>` (claude, codex, cursor, ...), removes only that agent's hooks/instructions and leaves the binary, shims, and other agents intact |
 | `ctx-wire trust` | Approve this project's `.ctx-wire/filters.toml` by hash |
 | `ctx-wire untrust` | Revoke trust for this project's `.ctx-wire/filters.toml` |
 | `ctx-wire gain` | Report token savings recorded so far, with per-program, per-source, and per-agent breakdowns |
@@ -210,6 +210,12 @@ After an upgrade, an existing hook/plugin-only install is **not** auto-modified:
   applies its own decision to the original command, instead of the wrapper hiding
   the command from your deny/ask rules. Commands with no matching rule keep the
   transparent allow-and-filter behavior.
+  On **Codex**, ctx-wire is a filter, not a permission gate: by default it
+  auto-approves the commands it wraps, so Codex runs uninterrupted and safety
+  stays with Codex's own approval policy. Commands ctx-wire did not wrap are
+  never touched, so Codex decides those normally. Set `CTX_WIRE_CODEX_SAFE=1`
+  to restore an audited gate instead, only read/build/test commands that hide
+  nothing auto-approve, and everything else falls through to Codex's own prompt.
 - **GitHub Copilot project integration**: writes `.github/copilot-instructions.md`
   plus `.github/hooks/ctx-wire-rewrite.json`. VS Code-style hook payloads are
   rewritten; Copilot CLI payloads get a deny-with-suggestion response because it

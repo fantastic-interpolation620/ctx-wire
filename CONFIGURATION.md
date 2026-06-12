@@ -131,6 +131,15 @@ Set `CTX_WIRE_TELEMETRY=0` to disable telemetry for one process. Set
 `CTX_WIRE_TELEMETRY_URL` to override the endpoint for tests or local Worker
 development.
 
+## Codex hook permissions
+
+The Codex hook is a filter, not a permission boundary: by default ctx-wire
+auto-approves the commands it wraps so the agent runs without extra prompts, and
+safety stays with Codex's own approval policy. Set `CTX_WIRE_CODEX_SAFE=1` (in
+Codex's shell env) to restore an audited gate, only read/build/test commands
+that hide nothing or redirect nowhere auto-approve, and everything else falls
+through to Codex's own prompt. See COMMANDS.md for the full behavior.
+
 ## Terminal color
 
 Human-facing commands (`gain`, `doctor`, `explain`, `tune`, `discover`,
