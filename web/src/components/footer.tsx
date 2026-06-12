@@ -143,7 +143,9 @@ export function Footer() {
           <span>© 2026 Pavel Ivanov · Released under MIT</span>
 
           <span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
-            <span className="uppercase tracking-caps text-label">Backed by</span>
+            <span className="uppercase tracking-caps text-label">
+              Backed by
+            </span>
             {BACKERS.map((backer) => (
               <a
                 key={backer.label}

@@ -8,7 +8,11 @@ export const IMPACT_ENDPOINT =
 export const COMMUNITY_ENDPOINT =
   "https://ctx-wire-community.iweb-ivanov.workers.dev/v1/community";
 
-export const POLL_MS = 5000;
+// /v1/impact is edge-cached for ~5 min, so polling faster than that just re-fetches
+// identical bytes while spending Worker requests (100k/day on the free tier). 30s
+// stays live enough and is ~6x lighter; useImpact also pauses polling entirely
+// while the tab is hidden, so only a visible tab ever hits the endpoint.
+export const POLL_MS = 30000;
 
 // USD per 1M tokens for the site-side savings estimate (the CLI sends tokens,
 // never dollars). Swappable; always shown as a labeled estimate.
