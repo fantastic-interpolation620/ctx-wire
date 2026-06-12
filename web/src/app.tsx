@@ -1,3 +1,4 @@
+import { CommandCuts } from "./components/command-cuts";
 import { ComparisonRtk } from "./components/comparison-rtk";
 import { Faq } from "./components/faq";
 import { Footer } from "./components/footer";
@@ -35,6 +36,8 @@ export function App() {
         <Hero stats={stats} />
 
         <HowItWorks />
+
+        <CommandCuts stats={stats} />
 
         <section className="flex w-full max-w-term flex-col gap-4">
           <div className="flex items-baseline gap-4">
