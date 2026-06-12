@@ -1,0 +1,31 @@
+[filters.git-blame]
+description = "Compact git blame: trim the duplicated source content, keep per-line commit metadata"
+match_command = "^git\\s+(?:(--no-pager|-C\\s+\\S+|-c\\s+\\S+)\\s+)*blame\\b"
+strip_ansi = true
+strip_lines_matching = ["^\\s*$"]
+truncate_lines_at = 120
+max_lines = 1000
+# git blame output IS the answer: each line is line N's commit metadata
+# (hash, author, date, line number) followed by that line's source content.
+# truncate_lines_at trims only the content tail, which DUPLICATES the file the
+# agent can re-read, so no unique info is lost and the full metadata head is kept.
+# max_lines is a generous backstop, NOT a routine cap: dropping a whole line drops
+# its unique blame metadata (unlike content, that is not re-readable), so the cap
+# sits well above typical file sizes; most files blame whole, only a pathological
+# blame head-caps + spools. The jq lesson: never destroy a targeted answer.
+
+[[tests.git-blame]]
+name = "ranged blame passes through (the targeted answer)"
+input = "ff350712 (Pavel Ivanov 2026-06-12 21:31:38 +0300 10) max_lines = 40"
+expected = "ff350712 (Pavel Ivanov 2026-06-12 21:31:38 +0300 10) max_lines = 40"
+
+[[tests.git-blame]]
+name = "long line trimmed, commit metadata head preserved"
+input = "abcd123 (A 2026-01-15 09:00:00 +0000 1) 012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+expected = "abcd123 (A 2026-01-15 09:00:00 +0000 1) 01234567890123456789012345678901234567890123456789012345678901234567890123456..."
+
+[[tests.git-blame]]
+name = "fatal error preserved"
+failed = true
+input = "fatal: no such path 'nope.go' in HEAD"
+expected = "fatal: no such path 'nope.go' in HEAD"
