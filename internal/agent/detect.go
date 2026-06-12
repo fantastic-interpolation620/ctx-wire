@@ -54,7 +54,13 @@ var detectPatterns = []detectPattern{
 	{name: "pi", patterns: []string{"pi-coding-agent", "pi coding agent", "/.pi/agent"}},
 	{name: "hermes", patterns: []string{"hermes"}},
 	{name: "vscode", patterns: []string{"vscode", "visual studio code"}},
-	{name: "visualstudio", patterns: []string{"visualstudio", "visual studio"}},
+	// "visual studio" alone is a substring of any path like
+	// `~/Documents/visual studio projects/`, which scanTokens joins into the same
+	// "visual studio" string and falsely attributes. Match the real signals
+	// instead: the `devenv` binary and the `Microsoft Visual Studio` install path,
+	// neither of which a user folder carries. (vscode is checked first, and its
+	// "visual studio code" needs the trailing "code", so VS Code is unaffected.)
+	{name: "visualstudio", patterns: []string{"visualstudio", "devenv", "microsoft visual studio"}},
 }
 
 // wireOnlyPatterns name ancestors that should route a command through ctx-wire

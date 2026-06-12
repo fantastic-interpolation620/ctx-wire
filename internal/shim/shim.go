@@ -562,7 +562,7 @@ if [ "$should_wire" != 1 ]; then
       *kilocode*) should_wire=1; detected_agent=kilocode; break ;;
       *antigravity*) should_wire=1; detected_agent=antigravity; break ;;
       *vscode*|*"Visual Studio Code"*|*"visual studio code"*) should_wire=1; detected_agent=vscode; break ;;
-      *visualstudio*|*"Visual Studio"*|*"visual studio"*) should_wire=1; detected_agent=visualstudio; break ;;
+      *visualstudio*|*devenv*|*"Microsoft Visual Studio"*) should_wire=1; detected_agent=visualstudio; break ;;
       *agent-browser*) should_wire=1; break ;;
     esac
     ppid=$(ps -o ppid= -p "$ppid" 2>/dev/null | tr -d ' ')

@@ -83,6 +83,11 @@ func TestMatchAgent(t *testing.T) {
 		"kilocode --run":                              "kilocode",
 		"bash -c 'ctx-wire run git status'":           "", // ctx-wire / shells must not match
 		"/bin/zsh":                                    "",
+		// Regression: a path argument containing "visual studio" must NOT attribute
+		// as Visual Studio (scanTokens joins path tokens into "visual studio").
+		"vim /Users/x/Documents/visual studio projects/notes.md": "",
+		// Real Visual Studio is still detected by its binary / install path.
+		"/c/Program Files/Microsoft Visual Studio/2022/Common7/IDE/devenv.exe": "visualstudio",
 	}
 	for cmd, want := range cases {
 		if got := matchAgent(cmd); got != want {

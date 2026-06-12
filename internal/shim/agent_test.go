@@ -26,7 +26,7 @@ func TestShimScriptDetectsAndExportsAgent(t *testing.T) {
 		"*kilocode*) should_wire=1; detected_agent=kilocode;",
 		"*antigravity*) should_wire=1; detected_agent=antigravity;",
 		`*vscode*|*"Visual Studio Code"*|*"visual studio code"*) should_wire=1; detected_agent=vscode;`,
-		`*visualstudio*|*"Visual Studio"*|*"visual studio"*) should_wire=1; detected_agent=visualstudio;`,
+		`*visualstudio*|*devenv*|*"Microsoft Visual Studio"*) should_wire=1; detected_agent=visualstudio;`,
 		`if [ -z "${CTX_WIRE_AGENT:-}" ] && [ -n "${detected_agent:-}" ]; then`,
 		"export CTX_WIRE_AGENT",
 		// Hook-capable agents pass through, both as a detected ancestor and as an
@@ -53,7 +53,7 @@ func TestShimScriptDetectsAndExportsAgent(t *testing.T) {
 		"*kilocode*) should_wire=1; detected_agent=kilocode;",
 		"*antigravity*) should_wire=1; detected_agent=antigravity;",
 		`*vscode*|*"Visual Studio Code"*|*"visual studio code"*) should_wire=1; detected_agent=vscode;`,
-		`*visualstudio*|*"Visual Studio"*|*"visual studio"*) should_wire=1; detected_agent=visualstudio;`,
+		`*visualstudio*|*devenv*|*"Microsoft Visual Studio"*) should_wire=1; detected_agent=visualstudio;`,
 	})
 	// agent-browser is wired but not attributed (it is a tool, not an agent).
 	if strings.Contains(script, "detected_agent=agent-browser") {
