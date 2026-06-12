@@ -210,6 +210,12 @@ After an upgrade, an existing hook/plugin-only install is **not** auto-modified:
   applies its own decision to the original command, instead of the wrapper hiding
   the command from your deny/ask rules. Commands with no matching rule keep the
   transparent allow-and-filter behavior.
+  For Claude, `init`, `uninstall`, and `doctor` act on **every** config directory,
+  not just the default `~/.claude`: whatever `CLAUDE_CONFIG_DIR` points at, plus
+  any `~/.claude*` sibling that has both a `settings.json` file and a `projects/`
+  directory. So a machine running several Claude configs (`~/.claude`,
+  `~/.claude-main`, ...) gets all of them wired from one `init claude`, reverted
+  together by `uninstall`, and `doctor` warns when a real config is left unhooked.
   On **Codex**, ctx-wire is a filter, not a permission gate: by default it
   auto-approves the commands it wraps, so Codex runs uninterrupted and safety
   stays with Codex's own approval policy. Commands ctx-wire did not wrap are
