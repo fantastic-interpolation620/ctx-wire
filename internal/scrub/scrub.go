@@ -42,7 +42,9 @@ var rules = []rule{
 			`|\bgithub_pat_[A-Za-z0-9_]{22,}\b` + // GitHub fine-grained PAT
 			`|\bxox[baprs]-[A-Za-z0-9-]{10,}\b` + // Slack token
 			`|\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b` + // Stripe key
-			`|\bsk-(?:ant-)?[A-Za-z0-9_\-]{20,}\b`, // OpenAI / Anthropic key
+			`|\bsk-(?:ant-)?[A-Za-z0-9_\-]{20,}\b` + // OpenAI / Anthropic key
+			`|\bhv[sbr]\.[A-Za-z0-9_-]{20,}\b` + // HashiCorp Vault service/batch/recovery token
+			`|\bpypi-[A-Za-z0-9_-]{16,}\b`, // PyPI API token
 	), replacement: redacted},
 	// Authorization: <scheme> <secret> -> keep the scheme, redact the secret.
 	// Any scheme word (Bearer, Basic, token, ApiKey, Digest, NTLM, custom) is
@@ -79,6 +81,7 @@ var (
 	literalAnchors = []string{
 		"eyJ", "AKIA", "ASIA", "AIza", "ghp_", "gho_", "ghu_", "ghs_", "ghr_",
 		"github_pat_", "xox", "sk_", "rk_", "sk-", "-----BEGIN", "://",
+		"hvs.", "hvb.", "hvr.", "pypi-",
 	}
 	keywordRoots = []string{
 		"passw", "pwd", "secret", "token", "api", "key", "auth", "client", "access", "private",

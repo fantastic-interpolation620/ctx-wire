@@ -88,6 +88,37 @@ func TestScrub(t *testing.T) {
 			mustDrop:  []string{"s3cr3tP4ss"},
 		},
 		{
+			name:      "vault service token with keyword",
+			in:        "token = hvs.CAESIFakeVaultTokenValue000000000000",
+			wantRedac: true,
+			mustDrop:  []string{"hvs.CAESIFakeVaultTokenValue000000000000"},
+		},
+		{
+			name:      "pypi token in isolation",
+			in:        "pypi-AgEIcHlwaS5vcmcFakePypiTokenValue00000",
+			wantRedac: true,
+			mustDrop:  []string{"pypi-AgEIcHlwaS5vcmcFakePypiTokenValue00000"},
+		},
+		{
+			name:      "vault token bare no keyword (prefilter regression guard)",
+			in:        "hvs.CAESIFakeVaultTokenValue000000000000",
+			wantRedac: true,
+			mustDrop:  []string{"hvs.CAESIFakeVaultTokenValue000000000000"},
+		},
+		{
+			name:      "aws control shape still redacts",
+			in:        "key=AKIAIOSFODNN7EXAMPLE done",
+			wantRedac: true,
+			mustKeep:  []string{"done"},
+			mustDrop:  []string{"AKIAIOSFODNN7EXAMPLE"},
+		},
+		{
+			name:      "benign hover and pypiserver prose not redacted",
+			in:        "Use hover.css from pypiserver to style buttons.",
+			wantRedac: false,
+			mustKeep:  []string{"hover.css", "pypiserver"},
+		},
+		{
 			name:      "plain text untouched",
 			in:        "Build succeeded. 0 warnings, 0 errors.",
 			wantRedac: false,
