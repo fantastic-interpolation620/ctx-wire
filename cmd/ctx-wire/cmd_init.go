@@ -80,67 +80,16 @@ func cmdInit(args []string) int {
 		return 0
 	}
 
-	var path string
-	var changed bool
-	var err error
-	switch agent {
-	case "cursor":
-		if path, err = install.CursorHooksPath(); err == nil {
-			changed, err = install.InstallCursor(path)
-		}
-	case "vscode":
-		var wd string
-		if wd, err = os.Getwd(); err == nil {
-			path = install.VSCodeMCPPath(wd)
-			changed, err = install.InstallMCP(path, "vscode")
-		}
-	case "visualstudio", "vs":
-		if path, err = install.VisualStudioMCPPath(); err == nil {
-			changed, err = install.InstallMCP(path, "visualstudio")
-		}
-	case "cline":
-		var wd string
-		if wd, err = os.Getwd(); err == nil {
-			path = install.ClineRulesPath(wd)
-			changed, err = install.InstallCline(path)
-		}
-	case "windsurf":
-		var wd string
-		if wd, err = os.Getwd(); err == nil {
-			path = install.WindsurfRulesPath(wd)
-			changed, err = install.InstallWindsurf(path)
-		}
-	case "kilocode":
-		var wd string
-		if wd, err = os.Getwd(); err == nil {
-			path = install.KilocodeRulesPath(wd)
-			changed, err = install.InstallKilocode(path)
-		}
-	case "antigravity":
-		var wd string
-		if wd, err = os.Getwd(); err == nil {
-			path = install.AntigravityRulesPath(wd)
-			changed, err = install.InstallAntigravity(path)
-		}
-	case "opencode":
-		if path, err = install.OpenCodePluginPath(); err == nil {
-			changed, err = install.InstallOpenCode(path)
-		}
-	case "pi":
-		if path, err = install.PiPluginPath(); err == nil {
-			changed, err = install.InstallPi(path)
-		}
-	case "hermes":
-		if path, err = install.HermesPluginDir(); err == nil {
-			changed, err = install.InstallHermes(path)
-		}
-	case "copilot", "github-copilot":
-		var wd string
-		if wd, err = os.Getwd(); err == nil {
-			path = filepath.Join(wd, ".github")
-			changed, err = install.InstallCopilot(install.CopilotInstructionsPath(wd), install.CopilotHookPath(wd))
-		}
-	default:
+	// Every remaining agent installs uniformly: resolve its path, write its
+	// wiring, report Configured/OK. That per-agent logic lives once in the
+	// install registry (install.InstallAgent), so this layer only renders the
+	// shared message and lands the binary/shims. canonicalInitAgent collapses
+	// aliases (vs, github-copilot) to the registry's canonical names. os.Getwd is
+	// passed lazily: it runs only for workdir-scoped agents, so an unknown name
+	// reports "unsupported" and home-scoped agents wire even without a cwd.
+	canonical := canonicalInitAgent(agent)
+	path, changed, ok, err := install.InstallAgent(canonical, os.Getwd)
+	if !ok {
 		fmt.Fprintf(os.Stderr, "ctx-wire init: unsupported agent %q (supported: claude, cursor, codex, gemini, cline, windsurf, kilocode, antigravity, opencode, pi, hermes, copilot, vscode, visualstudio)\n", agent)
 		return 2
 	}
@@ -154,7 +103,7 @@ func cmdInit(args []string) int {
 	} else {
 		fmt.Printf("%s ctx-wire already configured in %s\n", theme.OK.Render("OK"), theme.Path.Render(path))
 	}
-	if code := installSelfAndShims(theme, canonicalInitAgent(agent)); code != 0 {
+	if code := installSelfAndShims(theme, canonical); code != 0 {
 		return code
 	}
 	return 0

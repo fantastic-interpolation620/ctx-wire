@@ -281,39 +281,20 @@ func shimPathChecks(dir string, installed, active, total int, hookCovered bool) 
 // hookOrPluginConfigured reports whether any hook- or plugin-capable agent
 // integration is actually present. doctor uses it to tell that installed PATH
 // shims are redundant coverage (hence pure shell-startup overhead) rather than a
-// steering-only agent's sole path. Needles match hooksSection's own checks.
+// steering-only agent's sole path. It consumes the same install.AgentProbes as
+// hooksSection, so the per-agent marker and path stay in one place. Steering-rule
+// agents (cline/windsurf/kilocode/antigravity) are excluded: a rules file is not
+// command coverage, so it does not make installed shims redundant.
 func hookOrPluginConfigured(opts Options) bool {
-	has := func(p, needle string) bool {
-		c, e := fileContains(p, needle)
-		return e == nil && c
-	}
-	if dirs, err := install.ClaudeConfigDirs(); err == nil {
-		for _, dir := range dirs {
-			if has(filepath.Join(dir, "settings.json"), "ctx-wire hook claude") {
+	for _, p := range install.AgentProbes() {
+		if p.Kind == install.WiringRule {
+			continue
+		}
+		for _, path := range p.Paths(opts.Workdir) {
+			if c, e := fileContains(path, p.Needle); e == nil && c {
 				return true
 			}
 		}
-	}
-	if p, err := install.CursorHooksPath(); err == nil && has(p, "ctx-wire hook cursor") {
-		return true
-	}
-	if p, err := install.CodexHooksPath(); err == nil && has(p, "ctx-wire hook codex") {
-		return true
-	}
-	if p, err := install.GeminiSettingsPath(); err == nil && has(p, "ctx-wire-hook-gemini.sh") {
-		return true
-	}
-	if has(install.CopilotHookPath(opts.Workdir), "ctx-wire hook copilot") {
-		return true
-	}
-	if p, err := install.OpenCodePluginPath(); err == nil && has(p, "ctx-wire") {
-		return true
-	}
-	if p, err := install.PiPluginPath(); err == nil && has(p, "ctx-wire") {
-		return true
-	}
-	if dir, err := install.HermesPluginDir(); err == nil && has(filepath.Join(dir, "__init__.py"), "ctx-wire") {
-		return true
 	}
 	return false
 }
@@ -341,87 +322,116 @@ func missingSystemPathDirs() []string {
 	return missing
 }
 
+// hooksSection diagnoses each agent's ctx-wire wiring. The per-agent marker and
+// path come from install.AgentProbes (the same registry that drives init and
+// uninstall), so adding an agent needs no edit here. Two agents keep bespoke
+// rendering: claude (multiple config dirs, plus the file-tools capture row) and
+// codex (extra permission/feature/attribution rows). vscode and visualstudio are
+// MCP and diagnosed in mcpSection, so they carry no hooks-section probe.
 func hooksSection(opts Options) Section {
 	sec := Section{Title: "hooks"}
-
-	// Emit one hook check per detected Claude config dir. A real config that is
-	// not hooked is flagged as Warn because commands from that Claude instance
-	// escape ctx-wire entirely; Off means the dir does not exist yet.
-	claudeDirs, _ := install.ClaudeConfigDirs()
-	for _, dir := range claudeDirs {
-		p := filepath.Join(dir, "settings.json")
-		label := "claude"
-		if len(claudeDirs) > 1 {
-			label = "claude config " + display(dir)
+	for _, p := range install.AgentProbes() {
+		switch p.Name {
+		case "claude":
+			sec.Checks = append(sec.Checks, claudeHookChecks(p, opts)...)
+		case "codex":
+			sec.Checks = append(sec.Checks, codexHookChecks(p, opts)...)
+		default:
+			if c, ok := probeCheck(p, opts.Workdir); ok {
+				sec.Checks = append(sec.Checks, c)
+			}
 		}
-		sec.Checks = append(sec.Checks, hookCheckMulti(label, p, "ctx-wire hook claude"))
 	}
-	// The file-tools capture experiment (config-present only; runtime proof
-	// is Read/Grep counts falling in `ctx-wire session`).
+	return sec
+}
+
+// probeCheck renders the uniform per-kind check for one agent probe. ok is false
+// when the agent's path is unavailable on this OS/setup (resolver errored), in
+// which case the agent contributes no row, matching the prior `if err == nil`
+// gating. Steering-rule agents always resolve a path, so they always render
+// (Off when the rules file is absent).
+func probeCheck(p install.AgentProbe, workdir string) (Check, bool) {
+	paths := p.Paths(workdir)
+	if len(paths) == 0 {
+		return Check{}, false
+	}
+	switch p.Kind {
+	case install.WiringRule:
+		return ruleCheck(p.Name, paths[0], p.Needle), true
+	case install.WiringPlugin:
+		return pluginCheck(p.Name, paths[0], p.Needle), true
+	default: // WiringHook
+		return hookCheck(p.Name, paths[0], p.Needle), true
+	}
+}
+
+// claudeHookChecks renders one hook check per detected Claude config dir plus the
+// file-tools capture row. A real config that is not hooked is Warn (commands from
+// that Claude instance escape ctx-wire entirely); Off means the dir does not
+// exist yet. The capture row is config-present only; runtime proof is Read/Grep
+// counts falling in `ctx-wire session`.
+func claudeHookChecks(p install.AgentProbe, opts Options) []Check {
+	var checks []Check
+	paths := p.Paths(opts.Workdir)
+	for _, path := range paths {
+		label := "claude"
+		if len(paths) > 1 {
+			label = "claude config " + display(filepath.Dir(path))
+		}
+		checks = append(checks, hookCheckMulti(label, path, p.Needle))
+	}
 	if cfg, cerr := config.Load(); cerr == nil {
 		if cfg.Hooks.CaptureFileTools {
-			sec.Checks = append(sec.Checks, Check{"claude file-tools capture", OK,
+			checks = append(checks, Check{"claude file-tools capture", OK,
 				"experiment on: Read/Grep redirect to filtered shell commands; see the Captured column in `ctx-wire session`"})
 		} else {
-			sec.Checks = append(sec.Checks, Check{"claude file-tools capture", Off,
+			checks = append(checks, Check{"claude file-tools capture", Off,
 				"off; opt in with `ctx-wire init claude --capture-files`"})
 		}
 	}
-	if p, err := install.CursorHooksPath(); err == nil {
-		sec.Checks = append(sec.Checks, hookCheck("cursor", p, "ctx-wire hook cursor"))
+	return checks
+}
+
+// codexHookChecks renders codex's hook check plus its permission posture and the
+// feature/attribution rows. When CodexHooksPath is unavailable (no path), codex
+// contributes nothing, matching the prior `if err == nil` gating of the whole
+// block.
+func codexHookChecks(p install.AgentProbe, opts Options) []Check {
+	paths := p.Paths(opts.Workdir)
+	if len(paths) == 0 {
+		return nil
 	}
-	if p, err := install.CodexHooksPath(); err == nil {
-		sec.Checks = append(sec.Checks, hookCheck("codex", p, "ctx-wire hook codex"))
-		// Permission posture: ctx-wire is a filter, not a gate. By default it
-		// auto-approves the commands it wraps so codex runs uninterrupted; safety
-		// stays with codex's own approval policy. CTX_WIRE_CODEX_SAFE=1 restores
-		// the audited read/build/test gate.
-		sec.Checks = append(sec.Checks, Check{"codex permissions", OK,
-			"auto-approves wrapped commands (a filter, not a permission boundary); safety is codex's approval policy. Set CTX_WIRE_CODEX_SAFE=1 for an audited read/build/test gate."})
-		// Codex requires the hooks feature enabled and per-hook trust; report the
-		// feature flag but never alter trust.
-		if cp, cerr := install.CodexConfigPath(); cerr == nil {
-			if enabled, eerr := install.CodexHooksEnabled(cp); eerr == nil {
-				if enabled {
-					sec.Checks = append(sec.Checks, Check{"codex hooks feature", OK, "[features] hooks = true"})
-				} else {
-					sec.Checks = append(sec.Checks, Check{"codex hooks feature", Warn,
-						"disabled; set [features] hooks = true and trust the hook via `/hooks`"})
-				}
-			}
-			// Agent attribution proves config-present only: Codex profiles can
-			// override the top-level policy, so end-to-end confirmation is a
-			// later gain entry with agent=codex. Only reported when config.toml
-			// exists (a codex user), to avoid noise for everyone else.
-			if install.CodexAgentEnvConfigured(cp) {
-				sec.Checks = append(sec.Checks, Check{"codex agent attribution", OK,
-					"CTX_WIRE_AGENT=codex in shell_environment_policy.set (config-present; runtime proof is a gain entry with agent=codex)"})
-			} else if _, serr := os.Stat(cp); serr == nil {
-				sec.Checks = append(sec.Checks, Check{"codex agent attribution", Warn,
-					"not set; run `ctx-wire init codex` so gain attributes direct runs when the sandbox blocks ps"})
+	checks := []Check{hookCheck(p.Name, paths[0], p.Needle)}
+	// Permission posture: ctx-wire is a filter, not a gate. By default it
+	// auto-approves the commands it wraps so codex runs uninterrupted; safety
+	// stays with codex's own approval policy. CTX_WIRE_CODEX_SAFE=1 restores
+	// the audited read/build/test gate.
+	checks = append(checks, Check{"codex permissions", OK,
+		"auto-approves wrapped commands (a filter, not a permission boundary); safety is codex's approval policy. Set CTX_WIRE_CODEX_SAFE=1 for an audited read/build/test gate."})
+	// Codex requires the hooks feature enabled and per-hook trust; report the
+	// feature flag but never alter trust.
+	if cp, cerr := install.CodexConfigPath(); cerr == nil {
+		if enabled, eerr := install.CodexHooksEnabled(cp); eerr == nil {
+			if enabled {
+				checks = append(checks, Check{"codex hooks feature", OK, "[features] hooks = true"})
+			} else {
+				checks = append(checks, Check{"codex hooks feature", Warn,
+					"disabled; set [features] hooks = true and trust the hook via `/hooks`"})
 			}
 		}
+		// Agent attribution proves config-present only: Codex profiles can
+		// override the top-level policy, so end-to-end confirmation is a
+		// later gain entry with agent=codex. Only reported when config.toml
+		// exists (a codex user), to avoid noise for everyone else.
+		if install.CodexAgentEnvConfigured(cp) {
+			checks = append(checks, Check{"codex agent attribution", OK,
+				"CTX_WIRE_AGENT=codex in shell_environment_policy.set (config-present; runtime proof is a gain entry with agent=codex)"})
+		} else if _, serr := os.Stat(cp); serr == nil {
+			checks = append(checks, Check{"codex agent attribution", Warn,
+				"not set; run `ctx-wire init codex` so gain attributes direct runs when the sandbox blocks ps"})
+		}
 	}
-	if p, err := install.GeminiSettingsPath(); err == nil {
-		sec.Checks = append(sec.Checks, hookCheck("gemini", p, "ctx-wire-hook-gemini.sh"))
-	}
-	sec.Checks = append(sec.Checks, ruleCheck("cline", install.ClineRulesPath(opts.Workdir), "ctx-wire run"))
-	sec.Checks = append(sec.Checks, ruleCheck("windsurf", install.WindsurfRulesPath(opts.Workdir), "ctx-wire run"))
-	sec.Checks = append(sec.Checks, hookCheck("copilot", install.CopilotHookPath(opts.Workdir), "ctx-wire hook copilot"))
-	// Plugin-based hook-capable agents (OpenCode, Pi, Hermes). These are the most
-	// exposed by the shim-narrowing: `ctx-wire init` writes the plugin file, but
-	// enabling it is a separate step in the agent's own config, so a present file
-	// does not prove the host loaded it. Surface install state with that caveat.
-	if p, err := install.OpenCodePluginPath(); err == nil {
-		sec.Checks = append(sec.Checks, pluginCheck("opencode", p, "ctx-wire"))
-	}
-	if p, err := install.PiPluginPath(); err == nil {
-		sec.Checks = append(sec.Checks, pluginCheck("pi", p, "ctx-wire"))
-	}
-	if dir, err := install.HermesPluginDir(); err == nil {
-		sec.Checks = append(sec.Checks, pluginCheck("hermes", filepath.Join(dir, "__init__.py"), "ctx-wire"))
-	}
-	return sec
+	return checks
 }
 
 // pluginCheck reports a plugin-based agent's install state. Unlike a hook, a
