@@ -1,6 +1,6 @@
 [filters.pylint]
 description = "Compact pylint output"
-match_command = "^(uv\\s+run\\s+|python3?\\s+-m\\s+)?pylint\\b"
+match_command = "^(?:{{py-runner}})?pylint\\b"
 strip_ansi = true
 match_output = [
   { pattern = "Your code has been rated at 10\\.00/10", message = "pylint: ok" },

@@ -1,6 +1,6 @@
 [filters.pytest]
 description = "Compact pytest output"
-match_command = "^(uv\\s+run\\s+|python3?\\s+-m\\s+)?pytest\\b"
+match_command = "^(?:{{py-runner}})?pytest\\b"
 strip_ansi = true
 match_output = [
   { pattern = "(?m)=+ .* passed.*=+", message = "pytest: ok", unless = "(?i)(failed|error|traceback)" },

@@ -99,6 +99,42 @@ func TestRunnerPrefixConsistency(t *testing.T) {
 	}
 }
 
+// TestPyRunnerPrefixConsistency pins that every Python-cohort filter accepts the
+// full {{py-runner}} prefix set, so `poetry run pytest` (and pipenv/pdm/hatch/rye
+// run, plus `python -m`) is filtered rather than passed through. Guards the drift
+// this token replaced: each filter used to hand-roll only `uv run` and silently
+// missed the far more common `poetry run`.
+func TestPyRunnerPrefixConsistency(t *testing.T) {
+	reg, err := LoadBuiltin()
+	if err != nil {
+		t.Fatalf("LoadBuiltin: %v", err)
+	}
+	tools := []struct{ invoke, filter string }{
+		{"pytest -q", "pytest"},
+		{"ruff check .", "ruff"},
+		{"mypy .", "mypy"},
+		{"pylint app", "pylint"},
+		{"flake8 .", "flake8"},
+		{"pyright src", "pyright"},
+		{"basedpyright src", "basedpyright"},
+	}
+	// Bare invocation plus every prefix form the {{py-runner}} token must cover.
+	prefixes := []string{"", "uv run ", "poetry run ", "pipenv run ", "pdm run ", "hatch run ", "rye run ", "python -m ", "python3 -m "}
+	for _, tool := range tools {
+		for _, p := range prefixes {
+			cmd := p + tool.invoke
+			got := reg.Find(cmd)
+			if got == nil {
+				t.Errorf("Find(%q) = passthrough, want %q (py-runner-prefix drift?)", cmd, tool.filter)
+				continue
+			}
+			if got.Name != tool.filter {
+				t.Errorf("Find(%q) = %q, want %q", cmd, got.Name, tool.filter)
+			}
+		}
+	}
+}
+
 func TestRegistryFind(t *testing.T) {
 	reg, err := LoadBuiltin()
 	if err != nil {
@@ -205,6 +241,11 @@ func TestRegistryFind(t *testing.T) {
 		{"uv run pytest matches pytest", "uv run pytest -q", "pytest"},
 		{"uv run ruff matches ruff", "uv run ruff check .", "ruff"},
 		{"uv run mypy matches mypy", "uv run mypy .", "mypy"},
+		// {{py-runner}}: poetry/pipenv/pdm/hatch/rye run, not just uv (exhaustive
+		// coverage in TestPyRunnerPrefixConsistency).
+		{"poetry run pytest matches pytest", "poetry run pytest -q", "pytest"},
+		{"pipenv run ruff matches ruff", "pipenv run ruff check .", "ruff"},
+		{"pdm run mypy matches mypy", "pdm run mypy .", "mypy"},
 		// Batch D fix: JSON modes must route to passthrough guards, not truncating filters.
 		{"go list -json routes to guard", "go list -json ./...", "go-list-json"},
 		{"terraform show -json routes to guard", "terraform show -json plan.out", "terraform-show-json"},

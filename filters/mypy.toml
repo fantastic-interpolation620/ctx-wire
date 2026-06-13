@@ -1,6 +1,6 @@
 [filters.mypy]
 description = "Compact mypy output"
-match_command = "^(uv\\s+run\\s+|python3?\\s+-m\\s+)?mypy\\b"
+match_command = "^(?:{{py-runner}})?mypy\\b"
 strip_ansi = true
 match_output = [
   { pattern = "Success: no issues found", message = "mypy: ok" },

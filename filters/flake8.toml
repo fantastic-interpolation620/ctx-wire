@@ -1,6 +1,6 @@
 [filters.flake8]
 description = "Compact flake8 output"
-match_command = "^(uv\\s+run\\s+|python3?\\s+-m\\s+)?flake8\\b"
+match_command = "^(?:{{py-runner}})?flake8\\b"
 strip_ansi = true
 strip_lines_matching = ["^\\s*$"]
 max_lines = 160

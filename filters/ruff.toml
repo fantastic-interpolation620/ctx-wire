@@ -1,6 +1,6 @@
 [filters.ruff]
 description = "Compact Ruff output"
-match_command = "^(uv\\s+run\\s+|python3?\\s+-m\\s+)?ruff\\b"
+match_command = "^(?:{{py-runner}})?ruff\\b"
 strip_ansi = true
 match_output = [
   { pattern = "All checks passed!", message = "ruff: ok" },

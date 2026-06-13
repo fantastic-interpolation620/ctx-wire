@@ -214,10 +214,22 @@ type ApplyOptions struct {
 const (
 	runnerToken  = "{{runner}}"
 	runnerPrefix = `(?:npx|bunx)\s+|(?:pnpm|yarn)\s+(?:dlx|exec)\s+|bun\s+x\s+`
+
+	// pyRunnerToken expands to the canonical set of Python tool-runner prefixes:
+	// a `<manager> run` form (uv/poetry/pipenv/pdm/hatch/rye) or `python -m`.
+	// Like runnerToken, defining it once keeps the Python cohort (pytest, ruff,
+	// mypy, pylint, flake8, pyright, basedpyright) consistent instead of each
+	// hand-rolling a partial prefix that drifts , which is exactly what happened:
+	// every one matched only `uv run` and silently missed the far more common
+	// `poetry run` (and pipenv/pdm/hatch/rye). Pinned by TestPyRunnerPrefixConsistency.
+	pyRunnerToken  = "{{py-runner}}"
+	pyRunnerPrefix = `(?:uv|poetry|pipenv|pdm|hatch|rye)\s+run\s+|python3?\s+-m\s+`
 )
 
 func expandRunnerToken(pattern string) string {
-	return strings.ReplaceAll(pattern, runnerToken, runnerPrefix)
+	pattern = strings.ReplaceAll(pattern, runnerToken, runnerPrefix)
+	pattern = strings.ReplaceAll(pattern, pyRunnerToken, pyRunnerPrefix)
+	return pattern
 }
 
 // regexes up front. Returns an error if any regex is invalid or if strip and
