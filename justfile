@@ -75,6 +75,10 @@ race:
 vet:
     {{go}} vet ./...
 
+# Run staticcheck
+lint:
+    {{go}} run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+
 # Run built-in filter conformance tests
 verify:
     {{go}} run ./cmd/ctx-wire verify
@@ -88,7 +92,7 @@ smoke-windows:
     pwsh -NoProfile -File scripts/smoke.ps1
 
 # Run the pre-commit validation suite
-check: fmt-check vet test race verify
+check: fmt-check vet lint test race verify
 
 # Run full pre-release validation (check + smoke)
 rc: check smoke

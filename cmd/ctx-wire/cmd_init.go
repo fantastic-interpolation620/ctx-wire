@@ -284,26 +284,6 @@ func initCaptureFileTools(theme ui.Theme, settingsPath string, enable bool) {
 	}
 }
 
-// initAutoWrapMCP turns on snapshot compression for known snapshot-heavy MCP
-// servers in the Claude config (chrome-devtools, Playwright). Non-silent: every
-// change is printed with the revert path. Best-effort: a failure here warns and
-// never fails init, since the hook wiring above is already complete.
-func initAutoWrapMCP(theme ui.Theme) {
-	wrapped, err := autoWrapSnapshotMCP("")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ctx-wire init: mcp auto-wrap skipped: %v\n", err)
-		return
-	}
-	if len(wrapped) == 0 {
-		return
-	}
-	for _, name := range wrapped {
-		fmt.Printf("%s MCP server %q now relays through `ctx-wire mcp-wrap --compress` (browser snapshots reduced, raw spooled locally)\n",
-			theme.OK.Render("Configured"), name)
-	}
-	fmt.Printf("   %s\n", theme.Dim.Render("restart Claude to apply · revert anytime: ctx-wire mcp-wrap uninstall <server> (or skip with init --no-mcp)"))
-}
-
 // canonicalInitAgent maps an init target to the agent name used for per-agent
 // install telemetry, collapsing aliases so the breakdown does not split.
 func canonicalInitAgent(target string) string {

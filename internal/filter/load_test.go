@@ -27,12 +27,6 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-const makeFilter = `schema_version = 1
-[filters.make]
-match_command = "^make\\b"
-description = %q
-`
-
 func TestLoadTrustedProjectOverride(t *testing.T) {
 	proj, _ := isolateEnv(t)
 	ppath := ProjectFiltersPath(proj)

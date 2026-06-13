@@ -543,7 +543,7 @@ func applyGroupBy(g *compiledGroupBy, lines []string, perGroup, maxGroups int) (
 	var order []string
 	for _, l := range lines {
 		m := g.key.FindStringSubmatch(l)
-		if m == nil || len(m) < 2 {
+		if len(m) < 2 {
 			continue
 		}
 		k := m[1]
@@ -568,7 +568,7 @@ func applyGroupBy(g *compiledGroupBy, lines []string, perGroup, maxGroups int) (
 	out := make([]string, 0, len(lines))
 	for _, l := range lines {
 		m := g.key.FindStringSubmatch(l)
-		if m == nil || len(m) < 2 {
+		if len(m) < 2 {
 			out = append(out, l) // passthrough untouched
 			continue
 		}
