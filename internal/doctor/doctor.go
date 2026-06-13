@@ -328,8 +328,9 @@ func missingSystemPathDirs() []string {
 // path come from install.AgentProbes (the same registry that drives init and
 // uninstall), so adding an agent needs no edit here. Two agents keep bespoke
 // rendering: claude (multiple config dirs, plus the file-tools capture row) and
-// codex (extra permission/feature/attribution rows). vscode and visualstudio are
-// MCP and diagnosed in mcpSection, so they carry no hooks-section probe.
+// codex (extra permission/feature/attribution rows). vscode and visualstudio
+// carry a WiringMCP probe, which this loop skips because they are diagnosed in
+// mcpSection instead.
 func hooksSection(opts Options) Section {
 	sec := Section{Title: "hooks"}
 	for _, p := range install.AgentProbes() {

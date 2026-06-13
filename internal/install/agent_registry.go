@@ -502,10 +502,13 @@ func InstallAgent(name string, workdirFn func() (string, error)) (path string, c
 }
 
 // AgentProbes returns the read-only detection metadata for every agent doctor
-// diagnoses in its hooks section, in registry order. Agents with no hooks-section
-// probe (vscode/visualstudio, which are MCP) are omitted. Both doctor's
-// hooksSection and its shim-coverage check consume this, so the per-agent marker
-// and path live in exactly one place.
+// diagnoses, in registry order. This includes the MCP agents (Kind WiringMCP,
+// vscode/visualstudio), which doctor renders in its MCP section rather than its
+// hooks section; callers that want only command-coverage agents must filter by
+// Kind (hooksSection skips WiringMCP; the shim-coverage check counts only
+// WiringHook/WiringPlugin). An agent is omitted only if it has no ProbePaths.
+// doctor's hooksSection, mcpSection, and shim-coverage check all consume this, so
+// the per-agent marker and path live in exactly one place.
 func AgentProbes() []AgentProbe {
 	probes := make([]AgentProbe, 0, len(agentRegistry))
 	for _, a := range agentRegistry {
