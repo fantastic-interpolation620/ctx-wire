@@ -278,8 +278,12 @@ func ResolveReal(name string) (string, bool) {
 		return name, false
 	}
 	if strings.ContainsRune(name, filepath.Separator) {
-		data, err := os.ReadFile(name)
-		if err != nil || !isManaged(data) {
+		// Read only the head (isManagedShimFile) instead of the whole file: this
+		// runs per shimmed command and name is often a multi-MB real binary, yet
+		// the shim marker is always in the first line. Reading the head is also
+		// more correct, a real binary that merely contains the marker bytes deep
+		// inside is not a shim.
+		if !isManagedShimFile(name) {
 			return name, false
 		}
 		dir := filepath.Dir(name)
