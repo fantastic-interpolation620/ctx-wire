@@ -294,3 +294,85 @@ func TestScrubFailClosedRecoversPanic(t *testing.T) {
 		t.Fatalf("out = %q, want empty", out)
 	}
 }
+
+// TestTokenizeShell characterizes the current behavior of tokenizeShell for
+// edge-case inputs. Expectations are derived from reading the function body
+// directly (characterization tests of EXISTING behavior, not ideal behavior).
+func TestTokenizeShell(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			// Empty input: loop never runs, inWord stays false, nil returned.
+			name: "empty string",
+			in:   "",
+			want: nil,
+		},
+		{
+			// Single bare word: default branch accumulates runes, final flush.
+			name: "single bare word",
+			in:   "git",
+			want: []string{"git"},
+		},
+		{
+			// Multiple spaces between words are all whitespace separators.
+			name: "multiple spaces between words",
+			in:   "git   status",
+			want: []string{"git", "status"},
+		},
+		{
+			// Single-quoted span: space inside quotes is not a word boundary.
+			name: "single-quoted span with space",
+			in:   "echo 'a b'",
+			want: []string{"echo", "a b"},
+		},
+		{
+			// Double-quoted span: same as single-quoted for plain content.
+			name: "double-quoted span with space",
+			in:   `echo "a b"`,
+			want: []string{"echo", "a b"},
+		},
+		{
+			// Unclosed single quote: all chars after the quote are consumed
+			// into the current token (inWord stays true at EOF), so the
+			// unterminated content is flushed as a normal token.
+			name: "unclosed single quote",
+			in:   "echo 'unterminated",
+			want: []string{"echo", "unterminated"},
+		},
+		{
+			// Trailing backslash as the very last rune: the escape condition
+			// requires i+1 < len(runes), which is false, so the backslash
+			// falls to the default branch and is written literally.
+			name: "trailing backslash",
+			in:   `echo foo\`,
+			want: []string{"echo", `foo\`},
+		},
+		{
+			// Embedded newline: \n matches the whitespace case and acts as a
+			// word boundary, same as a space.
+			name: "embedded newline",
+			in:   "a\nb",
+			want: []string{"a", "b"},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			got := tokenizeShell(tt.in)
+			if len(got) != len(tt.want) {
+				t.Fatalf("tokenizeShell(%q) = %v (len %d), want %v (len %d)",
+					tt.in, got, len(got), tt.want, len(tt.want))
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Errorf("tokenizeShell(%q)[%d] = %q, want %q",
+						tt.in, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
