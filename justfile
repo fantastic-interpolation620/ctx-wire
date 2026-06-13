@@ -83,6 +83,11 @@ lint:
 verify:
     {{go}} run ./cmd/ctx-wire verify
 
+# Scan for reachable known vulnerabilities (Go stdlib + module graph). Run in CI;
+# not in `check` to keep the local pre-commit loop fast and offline.
+vuln:
+    {{go}} run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
 # Run the hermetic end-to-end smoke suite
 smoke:
     bash scripts/smoke.sh

@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: '1.26.4'
           check-latest: true
           cache: true
       - uses: extractions/setup-just@v2
@@ -25,6 +25,9 @@ jobs:
       # Hermetic end-to-end smoke suite.
       - name: Smoke
         run: just smoke
+      # Reachable-CVE scan against the build's Go stdlib + module graph.
+      - name: Vuln scan
+        run: just vuln
 
   # Real-Windows coverage for the .cmd shim and the self-update replace path. The
   # full Go suite is not Windows-green yet (some runner tests exec sh/cat), so we
@@ -35,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: '1.26.4'
           check-latest: true
           cache: true
       # Build every package and test binary so Windows compile breakage (a

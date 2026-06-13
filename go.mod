@@ -2,6 +2,8 @@ module ctx-wire
 
 go 1.26
 
+toolchain go1.26.4
+
 require (
 	github.com/BurntSushi/toml v1.4.0
 	github.com/charmbracelet/lipgloss v1.1.0
