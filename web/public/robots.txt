@@ -1,5 +1,0 @@
-# ctx-wire: all crawlers welcome, including AI answer engines.
-User-agent: *
-Allow: /
-
-Sitemap: https://ctx-wire.dev/sitemap.xml
